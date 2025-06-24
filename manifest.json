@@ -1,0 +1,22 @@
+// ──────────────────────────────
+// File: manifest.json
+// ──────────────────────────────
+{
+  "manifest_version": 3,
+  "name": "ChatGPT Local Exporter",
+  "version": "0.1.0",
+  "description": "Adds a tiny overlay that lets you bulk‑select turns in any ChatGPT thread and save them to a Markdown file – no servers, no telemetry.",
+  "icons": {
+    "128": "icon128.png"
+  },
+  "permissions": ["activeTab"],
+  "host_permissions": ["https://chat.openai.com/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://chat.openai.com/*"],
+      "js": ["content.js"],
+      "css": ["style.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}
