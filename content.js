@@ -47,7 +47,8 @@
   }
 
   // Helpers to find each message turn (adjust selector if OpenAI changes DOM)
-  const msgSelector = 'div[data-testid="conversation-turn"]';
+  const msgSelector = "div[data-message-author-role]";
+  // const msgSelector = 'div[data-testid="conversation-turn"]';
 
   function addCheckboxes() {
     document.querySelectorAll(msgSelector).forEach((node) => {
