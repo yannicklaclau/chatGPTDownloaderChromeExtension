@@ -26,7 +26,7 @@
       obs.observe(document.body, { childList: true, subtree: true });
     });
 
-  // Inject the floating toolbar near the text input
+  // Inject the floating toolbar positioned outside the text area
   async function injectToolbar() {
     console.log("ChatGPT Exporter: Attempting to inject toolbar");
 
@@ -35,29 +35,25 @@
       return; // already present
     }
 
-    // Try to find the text input area to position near it
-    const textInputContainer =
-      document.querySelector('form[class*="stretch"]') ||
-      document.querySelector("textarea") ||
-      document.querySelector('[data-testid="composer-text-input"]') ||
-      document.querySelector("main");
+    // Find the main conversation area to position the toolbar
+    const mainContainer = document.querySelector("main") || document.body;
 
-    if (!textInputContainer) {
-      console.log("ChatGPT Exporter: Could not find text input container");
+    if (!mainContainer) {
+      console.log("ChatGPT Exporter: Could not find main container");
       return;
     }
 
-    console.log("ChatGPT Exporter: Found input container, creating toolbar");
+    console.log("ChatGPT Exporter: Found main container, creating toolbar");
 
     const root = document.createElement("div");
     root.id = EXPORTER_ID;
     root.innerHTML = `
         <button id="gptSelBtn" class="gpt-btn">Select</button>
-        <button id="gptExpBtn" class="gpt-btn">Export MD</button>
+        <button id="gptExpBtn" class="gpt-btn" style="display:none;">Export MD</button>
       `;
 
-    // Insert the toolbar near the text input
-    textInputContainer.parentElement.insertBefore(root, textInputContainer);
+    // Position the toolbar as a floating element
+    mainContainer.appendChild(root);
     console.log("ChatGPT Exporter: Toolbar injected");
 
     // handlers
@@ -69,8 +65,14 @@
       console.log("ChatGPT Exporter: Select button clicked");
       selecting = !selecting;
       selBtn.textContent = selecting ? "Cancel" : "Select";
-      if (selecting) addCheckboxes();
-      else removeCheckboxes();
+
+      if (selecting) {
+        addCheckboxes();
+        expBtn.style.display = "inline-block"; // Show export button
+      } else {
+        removeCheckboxes();
+        expBtn.style.display = "none"; // Hide export button
+      }
     });
 
     expBtn.addEventListener("click", () => {
@@ -88,23 +90,56 @@
     const messages = document.querySelectorAll(msgSelector);
     console.log(`ChatGPT Exporter: Found ${messages.length} messages`);
 
-    messages.forEach((node) => {
-      if (node.querySelector("input.gpt-turn-cbx")) return;
+    messages.forEach((node, index) => {
+      if (node.querySelector(".gpt-turn-wrapper")) return; // Already has checkbox
+
+      // Create a wrapper for checkbox and number
+      const wrapper = document.createElement("div");
+      wrapper.className = "gpt-turn-wrapper";
+
+      // Create checkbox
       const cbx = document.createElement("input");
       cbx.type = "checkbox";
       cbx.className = "gpt-turn-cbx";
       cbx.checked = true;
+      cbx.id = `gpt-cbx-${index}`;
+
+      // Create number label
+      const label = document.createElement("label");
+      label.htmlFor = `gpt-cbx-${index}`;
+      label.className = "gpt-turn-number";
+      label.textContent = (index + 1).toString();
+
+      wrapper.appendChild(cbx);
+      wrapper.appendChild(label);
+
+      // Position the wrapper
       node.style.position = "relative";
-      cbx.style.position = "absolute";
-      cbx.style.top = "6px";
-      cbx.style.left = "6px";
-      node.prepend(cbx);
+      node.style.paddingLeft = "60px"; // Make room for checkbox + number
+
+      wrapper.style.position = "absolute";
+      wrapper.style.top = "10px";
+      wrapper.style.left = "10px";
+      wrapper.style.display = "flex";
+      wrapper.style.alignItems = "center";
+      wrapper.style.gap = "8px";
+      wrapper.style.zIndex = "1000";
+
+      node.prepend(wrapper);
     });
   }
 
   function removeCheckboxes() {
     console.log("ChatGPT Exporter: Removing checkboxes");
-    document.querySelectorAll("input.gpt-turn-cbx").forEach((c) => c.remove());
+
+    // Remove wrapper elements and reset padding
+    document.querySelectorAll(".gpt-turn-wrapper").forEach((wrapper) => {
+      const parent = wrapper.parentElement;
+      if (parent) {
+        parent.style.paddingLeft = ""; // Reset padding
+      }
+      wrapper.remove();
+    });
   }
 
   function htmlToMarkdown(html) {
@@ -132,8 +167,10 @@
 
     const selected = Array.from(document.querySelectorAll(msgSelector)).filter(
       (n) => {
-        const cbx = n.querySelector("input.gpt-turn-cbx");
-        return !cbx || cbx.checked; // if checkboxes removed (select all), include all
+        const wrapper = n.querySelector(".gpt-turn-wrapper");
+        if (!wrapper) return true; // If no checkboxes, include all
+        const cbx = wrapper.querySelector("input.gpt-turn-cbx");
+        return cbx && cbx.checked;
       }
     );
 
@@ -181,6 +218,36 @@
     console.log("ChatGPT Exporter: Export completed");
   }
 
+  // Detect SPA navigation (URL changes without page reload)
+  let currentUrl = window.location.href;
+
+  function onNavigationChange() {
+    const newUrl = window.location.href;
+    if (newUrl !== currentUrl) {
+      console.log(
+        "ChatGPT Exporter: Navigation detected",
+        currentUrl,
+        "→",
+        newUrl
+      );
+      currentUrl = newUrl;
+
+      // Remove existing toolbar and re-inject after navigation
+      const existing = document.getElementById(EXPORTER_ID);
+      if (existing) {
+        existing.remove();
+        console.log(
+          "ChatGPT Exporter: Removed existing toolbar for re-injection"
+        );
+      }
+
+      // Wait a bit for new content to load, then inject
+      setTimeout(() => {
+        tryInject();
+      }, 500);
+    }
+  }
+
   // Try multiple strategies to inject the toolbar
   function tryInject() {
     console.log("ChatGPT Exporter: Trying injection strategies");
@@ -205,6 +272,19 @@
   // -------------- boot ---------------
   console.log("ChatGPT Exporter: Starting boot process");
 
+  // Set up SPA navigation detection
+  const observer = new MutationObserver(() => {
+    onNavigationChange();
+  });
+
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
+
+  // Also listen for popstate (back/forward buttons)
+  window.addEventListener("popstate", onNavigationChange);
+
   // Try immediately if DOM is ready
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", tryInject);
@@ -212,6 +292,6 @@
     tryInject();
   }
 
-  // Also try after a delay for SPA navigation
+  // Also try after a delay for initial load
   setTimeout(tryInject, 1000);
 })();
