@@ -47,7 +47,7 @@
       return;
     }
 
-    // Find the text input area to position toolbar adjacent to it
+    // Find the text input container and voice button area
     const textInput =
       document.querySelector('textarea[data-testid="composer-text-input"]') ||
       document.querySelector("form textarea") ||
@@ -58,21 +58,26 @@
       return;
     }
 
+    // Find the container with the voice button (usually has microphone icon)
+    const inputContainer = textInput.closest("form") || textInput.parentElement;
+
     console.log("ChatGPT Exporter: Found text input, creating toolbar");
 
     const root = document.createElement("div");
     root.id = EXPORTER_ID;
     root.innerHTML = `
-        <button id="gptSelBtn" class="gpt-btn">Select</button>
+        <div class="gpt-main-controls">
+          <button id="gptSelBtn" class="gpt-btn">Select</button>
+          <button id="gptExpBtn" class="gpt-btn" style="display:none;">Export MD</button>
+        </div>
         <div id="gptExpContainer" style="display:none;">
-          <button id="gptExpBtn" class="gpt-btn">Export MD</button>
           <div id="gptSelectionInfo" class="selection-info"></div>
           <div id="gptRoleControls" class="role-controls"></div>
         </div>
       `;
 
-    // Position the toolbar relative to the text input
-    textInput.parentElement.appendChild(root);
+    // Position the toolbar to align with the bottom-right of the input area
+    inputContainer.appendChild(root);
     console.log("ChatGPT Exporter: Toolbar injected");
 
     // handlers
@@ -90,11 +95,13 @@
 
       if (selecting) {
         addCheckboxes();
+        expBtn.style.display = "inline-block"; // Show export button
         expContainer.style.display = "block";
         updateSelectionInfo();
         updateRoleControls();
       } else {
         removeCheckboxes();
+        expBtn.style.display = "none"; // Hide export button
         expContainer.style.display = "none";
       }
     });
@@ -129,33 +136,54 @@
       cbx.id = `gpt-cbx-${index}`;
       cbx.addEventListener("change", updateSelectionInfo);
 
-      // Create number label
+      // Create number label with role indicator
+      const role = node.getAttribute("data-message-author-role") || "unknown";
+      const roleIcon =
+        role === "user" ? "👤" : role === "assistant" ? "🤖" : "?";
+
       const label = document.createElement("label");
       label.htmlFor = `gpt-cbx-${index}`;
       label.className = "gpt-turn-number";
-      label.textContent = (index + 1).toString();
+      label.innerHTML = `${roleIcon}<br>${index + 1}`;
+      label.title = `${role} message #${index + 1}`;
 
-      // Create navigation arrow (down to next checkbox)
-      const navArrow = document.createElement("button");
-      navArrow.className = "gpt-nav-arrow";
-      navArrow.innerHTML = "↓";
-      navArrow.title = "Jump to next message";
+      // Create navigation arrows container
+      const navContainer = document.createElement("div");
+      navContainer.className = "gpt-nav-container";
+
+      // Up arrow (except for first message)
+      if (index > 0) {
+        const upArrow = document.createElement("button");
+        upArrow.className = "gpt-nav-arrow gpt-nav-up";
+        upArrow.innerHTML = "↑";
+        upArrow.title = "Jump to previous message";
+        upArrow.addEventListener("click", (e) => {
+          e.preventDefault();
+          scrollToCheckbox(index - 1);
+        });
+        navContainer.appendChild(upArrow);
+      }
+
+      // Down arrow (except for last message)
       if (index < messages.length - 1) {
-        navArrow.addEventListener("click", (e) => {
+        const downArrow = document.createElement("button");
+        downArrow.className = "gpt-nav-arrow gpt-nav-down";
+        downArrow.innerHTML = "↓";
+        downArrow.title = "Jump to next message";
+        downArrow.addEventListener("click", (e) => {
           e.preventDefault();
           scrollToCheckbox(index + 1);
         });
-      } else {
-        navArrow.style.visibility = "hidden"; // Hide on last message
+        navContainer.appendChild(downArrow);
       }
 
       wrapper.appendChild(cbx);
       wrapper.appendChild(label);
-      wrapper.appendChild(navArrow);
+      wrapper.appendChild(navContainer);
 
       // Position the wrapper
       node.style.position = "relative";
-      node.style.paddingLeft = "80px"; // More room for navigation arrow
+      node.style.paddingLeft = "100px"; // More room for role indicators and bi-directional arrows
 
       wrapper.style.position = "absolute";
       wrapper.style.top = "10px";
@@ -217,27 +245,47 @@
 
     roleControls.innerHTML = `
       <div class="role-summary">
-        <span>User: ${userSelected}/${userCount}</span>
-        <span>Assistant: ${assistantSelected}/${assistantCount}</span>
+        <span>User: ${userSelected}/${userCount} 
+          (<a href="#" onclick="selectRoleAll('user'); return false;" class="role-link">all</a> | 
+           <a href="#" onclick="selectRoleNone('user'); return false;" class="role-link">none</a>)
+        </span>
+        <span>Assistant: ${assistantSelected}/${assistantCount}
+          (<a href="#" onclick="selectRoleAll('assistant'); return false;" class="role-link">all</a> | 
+           <a href="#" onclick="selectRoleNone('assistant'); return false;" class="role-link">none</a>)
+        </span>
       </div>
       <div class="role-buttons">
-        <button class="role-btn" onclick="toggleRole('user')">Toggle User</button>
-        <button class="role-btn" onclick="toggleRole('assistant')">Toggle Assistant</button>
         <button class="role-btn" onclick="selectAll()">All</button>
         <button class="role-btn" onclick="selectNone()">None</button>
       </div>
     `;
   }
 
-  // Toggle selection for a specific role
-  window.toggleRole = function (role) {
+  // Select all messages for a specific role
+  window.selectRoleAll = function (role) {
     const messages = document.querySelectorAll(msgSelector);
     messages.forEach((node, index) => {
       const nodeRole = node.getAttribute("data-message-author-role");
       if (nodeRole === role) {
         const checkbox = document.querySelector(`#gpt-cbx-${index}`);
         if (checkbox) {
-          checkbox.checked = !checkbox.checked;
+          checkbox.checked = true;
+        }
+      }
+    });
+    updateSelectionInfo();
+    updateRoleControls();
+  };
+
+  // Select no messages for a specific role
+  window.selectRoleNone = function (role) {
+    const messages = document.querySelectorAll(msgSelector);
+    messages.forEach((node, index) => {
+      const nodeRole = node.getAttribute("data-message-author-role");
+      if (nodeRole === role) {
+        const checkbox = document.querySelector(`#gpt-cbx-${index}`);
+        if (checkbox) {
+          checkbox.checked = false;
         }
       }
     });
