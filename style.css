@@ -2,23 +2,23 @@
    File: style.css
    ────────────────────────────── */
 
-/* Floating toolbar positioned bottom-right, outside text area */
+/* Toolbar positioned adjacent to text input (bottom-left of text box) */
 #__gpt_local_exporter {
-  position: fixed;
-  bottom: 80px;
-  right: 20px;
+  position: relative;
   display: flex;
-  flex-direction: row;
-  gap: 10px;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0;
   z-index: 10001;
-  pointer-events: auto;
+  max-width: 300px;
 }
 
+/* Main select button */
 #__gpt_local_exporter .gpt-btn {
   background: #10a37f;
   color: #fff;
   border: none;
-  padding: 10px 16px;
+  padding: 8px 16px;
   font-size: 14px;
   font-weight: 500;
   border-radius: 8px;
@@ -40,19 +40,74 @@
   box-shadow: 0 2px 6px rgba(0,0,0,.2);
 }
 
+/* Export container with selection info */
+#gptExpContainer {
+  background: rgba(16, 163, 127, 0.05);
+  border: 1px solid rgba(16, 163, 127, 0.2);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+/* Selection info text */
+.selection-info {
+  font-size: 12px;
+  color: #666;
+  margin: 8px 0 4px 0;
+  text-align: center;
+}
+
+/* Role controls section */
+.role-controls {
+  margin-top: 8px;
+}
+
+.role-summary {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #10a37f;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.role-buttons {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.role-btn {
+  background: rgba(16, 163, 127, 0.1);
+  color: #10a37f;
+  border: 1px solid rgba(16, 163, 127, 0.3);
+  padding: 3px 8px;
+  font-size: 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex: 1;
+  min-width: 50px;
+}
+
+.role-btn:hover {
+  background: rgba(16, 163, 127, 0.2);
+  border-color: #10a37f;
+}
+
 /* Checkbox wrapper styling */
 .gpt-turn-wrapper {
   background: rgba(16, 163, 127, 0.1);
   border: 1px solid rgba(16, 163, 127, 0.3);
-  border-radius: 6px;
-  padding: 4px 8px;
+  border-radius: 8px;
+  padding: 6px 10px;
   backdrop-filter: blur(4px);
+  min-width: 70px;
 }
 
 /* Larger, more visible checkboxes */
 input.gpt-turn-cbx {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   accent-color: #10a37f;
   cursor: pointer;
   margin: 0;
@@ -67,4 +122,27 @@ input.gpt-turn-cbx {
   user-select: none;
   min-width: 16px;
   text-align: center;
+}
+
+/* Navigation arrows */
+.gpt-nav-arrow {
+  background: rgba(16, 163, 127, 0.2);
+  color: #10a37f;
+  border: 1px solid rgba(16, 163, 127, 0.4);
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: all 0.2s ease;
+}
+
+.gpt-nav-arrow:hover {
+  background: #10a37f;
+  color: white;
+  transform: scale(1.1);
 }
