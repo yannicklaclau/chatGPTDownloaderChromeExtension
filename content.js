@@ -75,8 +75,8 @@
         </div>
       `;
 
-    // Position the toolbar to align with the bottom-right of the input area
-    inputContainer.appendChild(root);
+    // Position the toolbar in the left margin
+    document.body.appendChild(root);
     console.log("ChatGPT Exporter: Toolbar injected");
 
     // handlers
@@ -118,9 +118,10 @@
     const messages = document.querySelectorAll(msgSelector);
     console.log(`ChatGPT Exporter: Found ${messages.length} messages`);
 
-    messages.forEach((node, index) => {
-      if (node.querySelector(".gpt-turn-wrapper")) return; // Already has checkbox
+    // Remove any existing checkboxes first
+    document.querySelectorAll(".gpt-turn-wrapper").forEach((w) => w.remove());
 
+    messages.forEach((node, index) => {
       // Create a wrapper for checkbox and controls
       const wrapper = document.createElement("div");
       wrapper.className = "gpt-turn-wrapper";
@@ -178,19 +179,44 @@
       wrapper.appendChild(label);
       wrapper.appendChild(navContainer);
 
-      // Position as overlay without changing original layout
-      node.style.position = "relative";
+      // Position in left margin column aligned with main toolbar
+      const nodeRect = node.getBoundingClientRect();
+      const nodeTop = nodeRect.top + window.scrollY;
 
       wrapper.style.position = "absolute";
-      wrapper.style.top = "8px";
-      wrapper.style.left = "8px";
+      wrapper.style.top = `${nodeTop + 8}px`;
+      wrapper.style.left = "280px"; // Same left position as main toolbar
       wrapper.style.display = "flex";
       wrapper.style.alignItems = "center";
       wrapper.style.gap = "6px";
       wrapper.style.zIndex = "1000";
 
-      node.prepend(wrapper);
+      document.body.appendChild(wrapper);
     });
+
+    // Add scroll listener to update positions
+    const updatePositions = () => {
+      const messages = document.querySelectorAll(msgSelector);
+      messages.forEach((node, index) => {
+        const wrapper = document
+          .querySelector(`#gpt-cbx-${index}`)
+          ?.closest(".gpt-turn-wrapper");
+        if (wrapper) {
+          const nodeRect = node.getBoundingClientRect();
+          const nodeTop = nodeRect.top + window.scrollY;
+          wrapper.style.top = `${nodeTop + 8}px`;
+        }
+      });
+    };
+
+    // Remove existing scroll listener if any
+    if (window.gptScrollListener) {
+      window.removeEventListener("scroll", window.gptScrollListener);
+    }
+
+    // Add new scroll listener
+    window.gptScrollListener = updatePositions;
+    window.addEventListener("scroll", updatePositions);
   }
 
   // Scroll to a specific checkbox
@@ -304,10 +330,16 @@
   function removeCheckboxes() {
     console.log("ChatGPT Exporter: Removing checkboxes");
 
-    // Remove wrapper elements without resetting layout
+    // Remove wrapper elements
     document.querySelectorAll(".gpt-turn-wrapper").forEach((wrapper) => {
       wrapper.remove();
     });
+
+    // Remove scroll listener
+    if (window.gptScrollListener) {
+      window.removeEventListener("scroll", window.gptScrollListener);
+      window.gptScrollListener = null;
+    }
   }
 
   function htmlToMarkdown(html) {

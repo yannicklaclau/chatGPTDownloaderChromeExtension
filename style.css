@@ -2,11 +2,11 @@
    File: style.css
    ────────────────────────────── */
 
-/* Main toolbar positioned outside and to the right of text input */
+/* Main toolbar positioned in left margin column */
 #__gpt_local_exporter {
-  position: absolute;
-  bottom: 20px;
-  right: -120px; /* Position outside text box to the right */
+  position: fixed;
+  top: 120px;
+  left: 280px; /* Position in left margin between sidebar and chat */
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -95,15 +95,15 @@
 
 
 
-/* Checkbox wrapper styling - overlay with better visibility */
+/* Checkbox wrapper styling - positioned in left margin */
 .gpt-turn-wrapper {
-  background: rgba(16, 163, 127, 0.9);
-  border: 2px solid #10a37f;
+  background: rgba(16, 163, 127, 0.1);
+  border: 1px solid rgba(16, 163, 127, 0.3);
   border-radius: 8px;
   padding: 6px 8px;
   backdrop-filter: blur(4px);
   min-width: 95px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 /* Larger, more visible checkboxes */
