@@ -178,13 +178,12 @@
       wrapper.appendChild(label);
       wrapper.appendChild(navContainer);
 
-      // Position the wrapper
+      // Position as overlay without changing original layout
       node.style.position = "relative";
-      node.style.paddingLeft = "100px"; // More room for role indicators and bi-directional arrows
 
       wrapper.style.position = "absolute";
-      wrapper.style.top = "10px";
-      wrapper.style.left = "10px";
+      wrapper.style.top = "8px";
+      wrapper.style.left = "8px";
       wrapper.style.display = "flex";
       wrapper.style.alignItems = "center";
       wrapper.style.gap = "6px";
@@ -246,15 +245,30 @@
     roleControls.innerHTML = `
       <div class="role-summary">
         <span>User: ${userSelected}/${userCount} 
-          (<a href="#" onclick="selectRoleAll('user'); return false;" class="role-link">all</a> | 
-           <a href="#" onclick="selectRoleNone('user'); return false;" class="role-link">none</a>)
+          (<a href="#" class="role-link" data-role="user" data-action="all">all</a> | 
+           <a href="#" class="role-link" data-role="user" data-action="none">none</a>)
         </span>
         <span>Assistant: ${assistantSelected}/${assistantCount}
-          (<a href="#" onclick="selectRoleAll('assistant'); return false;" class="role-link">all</a> | 
-           <a href="#" onclick="selectRoleNone('assistant'); return false;" class="role-link">none</a>)
+          (<a href="#" class="role-link" data-role="assistant" data-action="all">all</a> | 
+           <a href="#" class="role-link" data-role="assistant" data-action="none">none</a>)
         </span>
       </div>
     `;
+
+    // Add event listeners for role links
+    roleControls.querySelectorAll(".role-link").forEach((link) => {
+      link.addEventListener("click", (e) => {
+        e.preventDefault();
+        const role = e.target.getAttribute("data-role");
+        const action = e.target.getAttribute("data-action");
+
+        if (action === "all") {
+          selectRoleAll(role);
+        } else if (action === "none") {
+          selectRoleNone(role);
+        }
+      });
+    });
   }
 
   // Select all messages for a specific role
@@ -290,13 +304,8 @@
   function removeCheckboxes() {
     console.log("ChatGPT Exporter: Removing checkboxes");
 
-    // Remove wrapper elements and reset padding
+    // Remove wrapper elements without resetting layout
     document.querySelectorAll(".gpt-turn-wrapper").forEach((wrapper) => {
-      const parent = wrapper.parentElement;
-      if (parent) {
-        parent.style.paddingLeft = ""; // Reset padding
-        parent.style.position = ""; // Reset position
-      }
       wrapper.remove();
     });
   }
@@ -440,6 +449,7 @@
 
   // Detect SPA navigation (URL changes without page reload)
   let currentUrl = window.location.href;
+  let contentCheckInterval;
 
   function onNavigationChange() {
     const newUrl = window.location.href;
@@ -461,10 +471,32 @@
         );
       }
 
-      // Wait a bit for new content to load, then inject
+      // Clear any existing interval
+      if (contentCheckInterval) {
+        clearInterval(contentCheckInterval);
+      }
+
+      // Use multiple strategies to detect when content is ready
+      setTimeout(() => tryInject(), 300);
+      setTimeout(() => tryInject(), 800);
+      setTimeout(() => tryInject(), 1500);
+
+      // Polling fallback for stubborn cases
+      contentCheckInterval = setInterval(() => {
+        if (hasMessages() && !document.getElementById(EXPORTER_ID)) {
+          console.log("ChatGPT Exporter: Polling detected content ready");
+          tryInject();
+          clearInterval(contentCheckInterval);
+        }
+      }, 1000);
+
+      // Clear polling after reasonable time
       setTimeout(() => {
-        tryInject();
-      }, 500);
+        if (contentCheckInterval) {
+          clearInterval(contentCheckInterval);
+          contentCheckInterval = null;
+        }
+      }, 10000);
     }
   }
 
