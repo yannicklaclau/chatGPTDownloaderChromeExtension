@@ -5,7 +5,7 @@
 /* Main toolbar positioned in left margin, aligned with text input */
 #__gpt_local_exporter {
   position: fixed;
-  top: calc(100vh - 200px); /* Position relative to text input, expand downward */
+  top: calc(100vh - 140px); /* Position closer to text input, expand downward */
   left: 280px; /* Position in left margin between sidebar and chat */
   display: flex;
   flex-direction: column; /* Expand downward normally */

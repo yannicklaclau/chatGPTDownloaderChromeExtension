@@ -96,10 +96,29 @@
         expBtn.style.display = "inline-block"; // Show export button
         expContainer.style.display = "block";
         updateRoleControls();
+
+        // Scroll to first message for better UX
+        setTimeout(() => {
+          const firstMessage = document.querySelector(msgSelector);
+          if (firstMessage) {
+            firstMessage.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            });
+          }
+        }, 100);
       } else {
         removeCheckboxes();
         expBtn.style.display = "none"; // Hide export button
         expContainer.style.display = "none";
+
+        // Scroll back to bottom when canceling
+        setTimeout(() => {
+          window.scrollTo({
+            top: document.body.scrollHeight,
+            behavior: "smooth",
+          });
+        }, 100);
       }
     });
 
