@@ -2,11 +2,11 @@
    File: style.css
    ────────────────────────────── */
 
-/* Main toolbar positioned near voice icon area, bottom-right of text input */
+/* Main toolbar positioned outside and to the right of text input */
 #__gpt_local_exporter {
   position: absolute;
-  bottom: 8px;
-  right: 60px; /* Position to left of voice icon area */
+  bottom: 20px;
+  right: -120px; /* Position outside text box to the right */
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -57,18 +57,11 @@
   padding: 10px;
 }
 
-/* Selection info text */
-.selection-info {
-  font-size: 11px;
-  color: #666;
-  margin: 0 0 8px 0;
-  text-align: center;
-  font-weight: 500;
-}
+
 
 /* Role controls section */
 .role-controls {
-  margin-top: 6px;
+  margin-top: 4px;
 }
 
 .role-summary {
@@ -100,29 +93,7 @@
   color: #0e8e6f;
 }
 
-.role-buttons {
-  display: flex;
-  gap: 4px;
-  justify-content: center;
-}
 
-.role-btn {
-  background: rgba(16, 163, 127, 0.1);
-  color: #10a37f;
-  border: 1px solid rgba(16, 163, 127, 0.3);
-  padding: 2px 8px;
-  font-size: 9px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  flex: 1;
-  min-width: 40px;
-}
-
-.role-btn:hover {
-  background: rgba(16, 163, 127, 0.2);
-  border-color: #10a37f;
-}
 
 /* Checkbox wrapper styling */
 .gpt-turn-wrapper {

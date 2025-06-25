@@ -71,7 +71,6 @@
           <button id="gptExpBtn" class="gpt-btn" style="display:none;">Export MD</button>
         </div>
         <div id="gptExpContainer" style="display:none;">
-          <div id="gptSelectionInfo" class="selection-info"></div>
           <div id="gptRoleControls" class="role-controls"></div>
         </div>
       `;
@@ -84,7 +83,6 @@
     const selBtn = root.querySelector("#gptSelBtn");
     const expBtn = root.querySelector("#gptExpBtn");
     const expContainer = root.querySelector("#gptExpContainer");
-    const selectionInfo = root.querySelector("#gptSelectionInfo");
     const roleControls = root.querySelector("#gptRoleControls");
     let selecting = false;
 
@@ -97,7 +95,6 @@
         addCheckboxes();
         expBtn.style.display = "inline-block"; // Show export button
         expContainer.style.display = "block";
-        updateSelectionInfo();
         updateRoleControls();
       } else {
         removeCheckboxes();
@@ -134,7 +131,7 @@
       cbx.className = "gpt-turn-cbx";
       cbx.checked = true;
       cbx.id = `gpt-cbx-${index}`;
-      cbx.addEventListener("change", updateSelectionInfo);
+      cbx.addEventListener("change", updateRoleControls);
 
       // Create number label with role indicator
       const role = node.getAttribute("data-message-author-role") || "unknown";
@@ -201,22 +198,25 @@
   function scrollToCheckbox(index) {
     const checkbox = document.querySelector(`#gpt-cbx-${index}`);
     if (checkbox) {
-      checkbox.closest("[data-message-author-role]").scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
+      const messageElement = checkbox.closest("[data-message-author-role]");
+      if (messageElement) {
+        // Use a more aggressive scroll approach for better positioning
+        messageElement.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+          inline: "nearest",
+        });
+
+        // Additional timeout to ensure proper positioning on long messages
+        setTimeout(() => {
+          checkbox.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+            inline: "nearest",
+          });
+        }, 300);
+      }
     }
-  }
-
-  // Update selection information
-  function updateSelectionInfo() {
-    const selectionInfo = document.querySelector("#gptSelectionInfo");
-    if (!selectionInfo) return;
-
-    const checkboxes = document.querySelectorAll(".gpt-turn-cbx");
-    const checked = document.querySelectorAll(".gpt-turn-cbx:checked");
-
-    selectionInfo.textContent = `${checked.length} of ${checkboxes.length} selected`;
   }
 
   // Update role-based controls
@@ -254,10 +254,6 @@
            <a href="#" onclick="selectRoleNone('assistant'); return false;" class="role-link">none</a>)
         </span>
       </div>
-      <div class="role-buttons">
-        <button class="role-btn" onclick="selectAll()">All</button>
-        <button class="role-btn" onclick="selectNone()">None</button>
-      </div>
     `;
   }
 
@@ -273,7 +269,6 @@
         }
       }
     });
-    updateSelectionInfo();
     updateRoleControls();
   };
 
@@ -289,25 +284,6 @@
         }
       }
     });
-    updateSelectionInfo();
-    updateRoleControls();
-  };
-
-  // Select all messages
-  window.selectAll = function () {
-    document
-      .querySelectorAll(".gpt-turn-cbx")
-      .forEach((cbx) => (cbx.checked = true));
-    updateSelectionInfo();
-    updateRoleControls();
-  };
-
-  // Select no messages
-  window.selectNone = function () {
-    document
-      .querySelectorAll(".gpt-turn-cbx")
-      .forEach((cbx) => (cbx.checked = false));
-    updateSelectionInfo();
     updateRoleControls();
   };
 
