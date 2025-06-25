@@ -139,11 +139,13 @@
       const roleIcon =
         role === "user" ? "👤" : role === "assistant" ? "🤖" : "?";
 
+      const displayRole = role === "assistant" ? "ChatGPT" : role;
+
       const label = document.createElement("label");
       label.htmlFor = `gpt-cbx-${index}`;
       label.className = "gpt-turn-number";
       label.innerHTML = `${roleIcon}<br>${index + 1}`;
-      label.title = `${role} message #${index + 1}`;
+      label.title = `${displayRole} message #${index + 1}`;
 
       // Create navigation arrows container
       const navContainer = document.createElement("div");
@@ -251,9 +253,9 @@
 
     const messages = document.querySelectorAll(msgSelector);
     let userCount = 0;
-    let assistantCount = 0;
+    let chatgptCount = 0;
     let userSelected = 0;
-    let assistantSelected = 0;
+    let chatgptSelected = 0;
 
     messages.forEach((node, index) => {
       const role = node.getAttribute("data-message-author-role") || "unknown";
@@ -263,8 +265,8 @@
         userCount++;
         if (checkbox && checkbox.checked) userSelected++;
       } else if (role === "assistant") {
-        assistantCount++;
-        if (checkbox && checkbox.checked) assistantSelected++;
+        chatgptCount++;
+        if (checkbox && checkbox.checked) chatgptSelected++;
       }
     });
 
@@ -274,7 +276,7 @@
           (<a href="#" class="role-link" data-role="user" data-action="all">all</a> | 
            <a href="#" class="role-link" data-role="user" data-action="none">none</a>)
         </span>
-        <span>Assistant: ${assistantSelected}/${assistantCount}
+        <span>ChatGPT: ${chatgptSelected}/${chatgptCount}
           (<a href="#" class="role-link" data-role="assistant" data-action="all">all</a> | 
            <a href="#" class="role-link" data-role="assistant" data-action="none">none</a>)
         </span>
@@ -451,9 +453,16 @@
         el.querySelector('[data-testid="conversation-turn-author-role"]') ||
         el.querySelector("[data-message-author-role]");
 
-      const role = roleEl
+      let role = roleEl
         ? roleEl.textContent.trim()
         : el.getAttribute("data-message-author-role") || "Message";
+
+      // Replace "assistant" with "ChatGPT" and make role ALL CAPS
+      if (role.toLowerCase() === "assistant") {
+        role = "CHATGPT";
+      } else {
+        role = role.toUpperCase();
+      }
 
       const textEl =
         el.querySelector(".markdown, .whitespace-pre-wrap, .prose") ||
@@ -461,7 +470,7 @@
         el;
 
       const body = textEl ? htmlToMarkdown(textEl.innerHTML) : "(no text)";
-      md += `### ${role}\n\n${body}\n\n`;
+      md += `## ${role}\n\n${body}\n\n`;
     });
 
     const blob = new Blob([md], { type: "text/markdown" });
