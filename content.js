@@ -118,10 +118,8 @@
     const messages = document.querySelectorAll(msgSelector);
     console.log(`ChatGPT Exporter: Found ${messages.length} messages`);
 
-    // Remove any existing checkboxes first
-    document.querySelectorAll(".gpt-turn-wrapper").forEach((w) => w.remove());
-
     messages.forEach((node, index) => {
+      if (node.querySelector(".gpt-turn-wrapper")) return; // Already has checkbox
       // Create a wrapper for checkbox and controls
       const wrapper = document.createElement("div");
       wrapper.className = "gpt-turn-wrapper";
@@ -181,50 +179,22 @@
       wrapper.appendChild(label);
       wrapper.appendChild(navContainer);
 
-      // Position in left margin - simpler approach with relative positioning
+      // Position relative to the actual chat message (not fixed overlay)
       node.style.position = "relative";
+      node.style.paddingLeft = "100px"; // Make room for checkbox in left margin
 
-      wrapper.style.position = "fixed";
-      wrapper.style.left = "280px"; // Same left position as main toolbar
-      wrapper.style.top = "auto";
+      wrapper.style.position = "absolute";
+      wrapper.style.top = "8px";
+      wrapper.style.left = "-90px"; // Position in the margin to the left
       wrapper.style.display = "flex";
       wrapper.style.alignItems = "center";
       wrapper.style.gap = "6px";
       wrapper.style.zIndex = "1000";
 
-      // Calculate position relative to the message
-      const updateWrapperPosition = () => {
-        const nodeRect = node.getBoundingClientRect();
-        wrapper.style.top = `${nodeRect.top + 8}px`;
-      };
-
-      // Set initial position
-      updateWrapperPosition();
-
-      // Store update function for scroll handling
-      wrapper.updatePosition = updateWrapperPosition;
-
-      document.body.appendChild(wrapper);
+      node.appendChild(wrapper);
     });
 
-    // Add scroll listener to update checkbox positions
-    const updatePositions = () => {
-      document.querySelectorAll(".gpt-turn-wrapper").forEach((wrapper) => {
-        if (wrapper.updatePosition) {
-          wrapper.updatePosition();
-        }
-      });
-    };
-
-    // Remove existing scroll listener if any
-    if (window.gptScrollListener) {
-      window.removeEventListener("scroll", window.gptScrollListener);
-    }
-
-    // Add new scroll listener
-    window.gptScrollListener = updatePositions;
-    window.addEventListener("scroll", updatePositions);
-    window.addEventListener("resize", updatePositions);
+    // No need for scroll listeners with relative positioning
   }
 
   // Scroll to a specific checkbox
@@ -338,16 +308,15 @@
   function removeCheckboxes() {
     console.log("ChatGPT Exporter: Removing checkboxes");
 
-    // Remove wrapper elements
+    // Remove wrapper elements and reset padding
     document.querySelectorAll(".gpt-turn-wrapper").forEach((wrapper) => {
+      const parent = wrapper.parentElement;
+      if (parent) {
+        parent.style.paddingLeft = ""; // Reset padding
+        parent.style.position = ""; // Reset position
+      }
       wrapper.remove();
     });
-
-    // Remove scroll listener
-    if (window.gptScrollListener) {
-      window.removeEventListener("scroll", window.gptScrollListener);
-      window.gptScrollListener = null;
-    }
   }
 
   function htmlToMarkdown(html) {
