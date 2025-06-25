@@ -2,10 +2,10 @@
    File: style.css
    ────────────────────────────── */
 
-/* Main toolbar positioned in left margin column */
+/* Main toolbar positioned in left margin, aligned with text input */
 #__gpt_local_exporter {
   position: fixed;
-  top: 120px;
+  bottom: 100px; /* Align with text input area */
   left: 280px; /* Position in left margin between sidebar and chat */
   display: flex;
   flex-direction: column;

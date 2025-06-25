@@ -181,32 +181,37 @@
       wrapper.appendChild(label);
       wrapper.appendChild(navContainer);
 
-      // Position in left margin column aligned with main toolbar
-      const nodeRect = node.getBoundingClientRect();
-      const nodeTop = nodeRect.top + window.scrollY;
+      // Position in left margin - simpler approach with relative positioning
+      node.style.position = "relative";
 
-      wrapper.style.position = "absolute";
-      wrapper.style.top = `${nodeTop + 8}px`;
+      wrapper.style.position = "fixed";
       wrapper.style.left = "280px"; // Same left position as main toolbar
+      wrapper.style.top = "auto";
       wrapper.style.display = "flex";
       wrapper.style.alignItems = "center";
       wrapper.style.gap = "6px";
       wrapper.style.zIndex = "1000";
 
+      // Calculate position relative to the message
+      const updateWrapperPosition = () => {
+        const nodeRect = node.getBoundingClientRect();
+        wrapper.style.top = `${nodeRect.top + 8}px`;
+      };
+
+      // Set initial position
+      updateWrapperPosition();
+
+      // Store update function for scroll handling
+      wrapper.updatePosition = updateWrapperPosition;
+
       document.body.appendChild(wrapper);
     });
 
-    // Add scroll listener to update positions
+    // Add scroll listener to update checkbox positions
     const updatePositions = () => {
-      const messages = document.querySelectorAll(msgSelector);
-      messages.forEach((node, index) => {
-        const wrapper = document
-          .querySelector(`#gpt-cbx-${index}`)
-          ?.closest(".gpt-turn-wrapper");
-        if (wrapper) {
-          const nodeRect = node.getBoundingClientRect();
-          const nodeTop = nodeRect.top + window.scrollY;
-          wrapper.style.top = `${nodeTop + 8}px`;
+      document.querySelectorAll(".gpt-turn-wrapper").forEach((wrapper) => {
+        if (wrapper.updatePosition) {
+          wrapper.updatePosition();
         }
       });
     };
@@ -219,6 +224,7 @@
     // Add new scroll listener
     window.gptScrollListener = updatePositions;
     window.addEventListener("scroll", updatePositions);
+    window.addEventListener("resize", updatePositions);
   }
 
   // Scroll to a specific checkbox
