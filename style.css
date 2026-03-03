@@ -1,20 +1,36 @@
-/* ──────────────────────────────
-   File: style.css
-   ────────────────────────────── */
+/* File: style.css (v0.2 - ChatGPT + Claude) */
 
-/* Main toolbar positioned in left margin, aligned with text input */
+/* Toolbar container */
 #__gpt_local_exporter {
   position: fixed;
-  top: calc(100vh - 140px); /* Position closer to text input, expand downward */
-  left: 280px; /* Position in left margin between sidebar and chat */
+  top: calc(100vh - 140px);
+  left: 280px;
   display: flex;
-  flex-direction: column; /* Expand downward normally */
+  flex-direction: column;
   gap: 8px;
   z-index: 10001;
   max-width: 280px;
 }
 
-/* Main controls container - horizontal layout */
+/* Claude sidebar is wider */
+#__gpt_local_exporter[data-platform="claude"] {
+  left: 320px;
+}
+
+/* Brand tokens */
+#__gpt_local_exporter {
+  --brand: #10a37f;
+  --brand-hover: #0e8e6f;
+  --brand-active: #0d7a63;
+}
+
+#__gpt_local_exporter[data-platform="claude"] {
+  --brand: #d97706;
+  --brand-hover: #b45309;
+  --brand-active: #92400e;
+}
+
+/* Main controls */
 .gpt-main-controls {
   display: flex;
   flex-direction: row;
@@ -22,9 +38,8 @@
   align-items: center;
 }
 
-/* Main select and export buttons */
 #__gpt_local_exporter .gpt-btn {
-  background: #10a37f;
+  background: var(--brand);
   color: #fff;
   border: none;
   padding: 6px 12px;
@@ -32,24 +47,24 @@
   font-weight: 500;
   border-radius: 6px;
   cursor: pointer;
-  box-shadow: 0 2px 6px rgba(0,0,0,.15);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
   transition: all 0.2s ease;
   white-space: nowrap;
 }
 
 #__gpt_local_exporter .gpt-btn:hover {
-  background: #0e8e6f;
+  background: var(--brand-hover);
   transform: translateY(-1px);
-  box-shadow: 0 3px 8px rgba(0,0,0,.2);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
 }
 
 #__gpt_local_exporter .gpt-btn:active {
-  background: #0d7a63;
+  background: var(--brand-active);
   transform: translateY(0);
-  box-shadow: 0 2px 4px rgba(0,0,0,.15);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
 }
 
-/* Export container with selection info */
+/* Export panel */
 #gptExpContainer {
   background: rgba(16, 163, 127, 0.05);
   border: 1px solid rgba(16, 163, 127, 0.2);
@@ -57,9 +72,12 @@
   padding: 10px;
 }
 
+#__gpt_local_exporter[data-platform="claude"] #gptExpContainer {
+  background: rgba(217, 119, 6, 0.05);
+  border-color: rgba(217, 119, 6, 0.2);
+}
 
-
-/* Role controls section */
+/* Role controls */
 .role-controls {
   margin-top: 4px;
 }
@@ -69,7 +87,7 @@
   flex-direction: column;
   gap: 2px;
   font-size: 10px;
-  color: #10a37f;
+  color: var(--brand);
   margin-bottom: 6px;
   font-weight: 500;
   line-height: 1.3;
@@ -79,9 +97,8 @@
   white-space: nowrap;
 }
 
-/* Role quick links */
 .role-link {
-  color: #10a37f;
+  color: var(--brand);
   text-decoration: none;
   font-size: 9px;
   font-weight: 400;
@@ -90,12 +107,10 @@
 
 .role-link:hover {
   text-decoration: underline;
-  color: #0e8e6f;
+  color: var(--brand-hover);
 }
 
-
-
-/* Checkbox wrapper styling - positioned in left margin */
+/* Per-message wrappers */
 .gpt-turn-wrapper {
   background: rgba(16, 163, 127, 0.1);
   border: 1px solid rgba(16, 163, 127, 0.3);
@@ -106,20 +121,18 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-/* Larger, more visible checkboxes */
 input.gpt-turn-cbx {
   width: 18px;
   height: 18px;
-  accent-color: #10a37f;
+  accent-color: var(--brand, #10a37f);
   cursor: pointer;
   margin: 0;
 }
 
-/* Number labels next to checkboxes */
 .gpt-turn-number {
   font-size: 10px;
   font-weight: 600;
-  color: #10a37f;
+  color: var(--brand, #10a37f);
   cursor: pointer;
   user-select: none;
   min-width: 24px;
@@ -130,17 +143,15 @@ input.gpt-turn-cbx {
   align-items: center;
 }
 
-/* Navigation arrows container */
 .gpt-nav-container {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-/* Navigation arrows */
 .gpt-nav-arrow {
   background: rgba(16, 163, 127, 0.2);
-  color: #10a37f;
+  color: var(--brand, #10a37f);
   border: 1px solid rgba(16, 163, 127, 0.4);
   width: 16px;
   height: 16px;
@@ -155,7 +166,7 @@ input.gpt-turn-cbx {
 }
 
 .gpt-nav-arrow:hover {
-  background: #10a37f;
-  color: white;
+  background: var(--brand, #10a37f);
+  color: #fff;
   transform: scale(1.1);
 }

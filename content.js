@@ -1,24 +1,63 @@
-// ──────────────────────────────
-// File: content.js
-// ──────────────────────────────
+// File: content.js (v0.2 - ChatGPT + Claude)
 (function () {
-  console.log("ChatGPT Exporter: Content script loaded");
+  const PLATFORM = window.location.hostname.includes("claude.ai")
+    ? "claude"
+    : "chatgpt";
+  console.log(`Chat Exporter: Loaded on platform = ${PLATFORM}`);
 
   const EXPORTER_ID = "__gpt_local_exporter";
 
-  // Wait until the main chat area exists (SPA can race)
+  const SELECTORS = {
+    chatgpt: {
+      msgSelector: "div[data-message-author-role]",
+      roleAttr: "data-message-author-role",
+      textContainer: (el) =>
+        el.querySelector(".markdown, .whitespace-pre-wrap, .prose, div[class*='markdown']") ||
+        el,
+      role: (el) => el.getAttribute("data-message-author-role") || "message",
+      inputSelector:
+        'textarea[data-testid="composer-text-input"], form textarea, textarea',
+      titleFn: () => {
+        const h1 =
+          document.querySelector('h1[data-testid="conversation-title"]') ||
+          document.querySelector("h1") ||
+          document.querySelector('[data-testid*="title"]');
+        return (
+          (h1 ? h1.textContent.trim() : document.title.replace(" – ChatGPT", "")) ||
+          "ChatGPT Conversation"
+        );
+      },
+      filePrefix: "ChatGPT",
+      assistantName: "CHATGPT",
+    },
+    claude: {
+      msgSelector: "[data-test-render-count]",
+      roleAttr: null,
+      textContainer: null,
+      role: (el) =>
+        el.querySelector('[data-testid="user-message"]') ? "user" : "assistant",
+      inputSelector: '[data-testid="chat-input"], [data-testid="chat-input-ssr"]',
+      titleFn: () => {
+        const btn = document.querySelector('[data-testid="chat-title-button"]');
+        return (
+          (btn ? btn.innerText.trim() : document.title.replace(" - Claude", "")) ||
+          "Claude Conversation"
+        );
+      },
+      filePrefix: "Claude",
+      assistantName: "CLAUDE",
+    },
+  };
+
+  const SEL = SELECTORS[PLATFORM];
+
   const waitForEl = (sel) =>
     new Promise((res) => {
-      console.log(`ChatGPT Exporter: Waiting for element: ${sel}`);
       const found = document.querySelector(sel);
-      if (found) {
-        console.log(`ChatGPT Exporter: Found element immediately: ${sel}`);
-        return res(found);
-      }
+      if (found) return res(found);
       const obs = new MutationObserver(() => {
         const n = document.querySelector(sel);
         if (n) {
-          console.log(`ChatGPT Exporter: Found element via mutation: ${sel}`);
           obs.disconnect();
           res(n);
         }
@@ -26,124 +65,188 @@
       obs.observe(document.body, { childList: true, subtree: true });
     });
 
-  // Check if there are messages to export
-  function hasMessages() {
-    const messages = document.querySelectorAll(msgSelector);
-    return messages.length > 0;
+  function getMessageTurns() {
+    const all = document.querySelectorAll(SEL.msgSelector);
+    if (PLATFORM === "chatgpt") return [...all];
+
+    return [...all].filter(
+      (el) =>
+        el.querySelector('[data-testid="user-message"]') ||
+        el.querySelector(".font-claude-response")
+    );
   }
 
-  // Inject the floating toolbar positioned adjacent to the text input
+  function hasMessages() {
+    return getMessageTurns().length > 0;
+  }
+
+  function extractClaudeText(turnEl) {
+    const isUser = !!turnEl.querySelector('[data-testid="user-message"]');
+
+    if (isUser) {
+      const userMsg = turnEl.querySelector('[data-testid="user-message"]');
+      return userMsg ? userMsg.innerHTML : "(no text)";
+    }
+
+    const responseContainer = turnEl.querySelector(".font-claude-response");
+    if (!responseContainer) return "(no text)";
+
+    const markdowns = responseContainer.querySelectorAll(".standard-markdown");
+    if (!markdowns.length) return responseContainer.innerHTML;
+
+    const lastMd = markdowns[markdowns.length - 1];
+    return lastMd.innerHTML;
+  }
+
+  function htmlToMarkdown(html) {
+    html = html.replace(
+      /<div[^>]*class="[^"]*relative[^"]*group\/copy[^"]*"[^>]*>[\s\S]*?<div[^>]*class="[^"]*overflow-x-auto[^"]*"[^>]*><pre[^>]*>([\s\S]*?)<\/pre><\/div>[\s\S]*?<\/div>/gi,
+      (_, code) => `\n\`\`\`\n${code.replace(/<[^>]*>/g, "").trim()}\n\`\`\`\n`
+    );
+
+    html = html.replace(
+      /<pre[^>]*class="[^"]*code-block__code[^"]*"[^>]*>([\s\S]*?)<\/pre>/gi,
+      (_, code) => `\n\`\`\`\n${code.replace(/<[^>]*>/g, "").trim()}\n\`\`\`\n`
+    );
+
+    html = html.replace(
+      /<pre><code[^>]*>([\s\S]*?)<\/code><\/pre>/gi,
+      (_, code) => `\n\`\`\`\n${code.replace(/<[^>]*>/g, "").trim()}\n\`\`\`\n`
+    );
+
+    html = html.replace(
+      /<pre[^>]*>([\s\S]*?)<\/pre>/gi,
+      (_, code) => `\n\`\`\`\n${code.replace(/<[^>]*>/g, "").trim()}\n\`\`\`\n`
+    );
+
+    html = html.replace(/<code[^>]*>(.*?)<\/code>/gi, "`$1`");
+
+    html = html
+      .replace(/<strong[^>]*>(.*?)<\/strong>/gi, "**$1**")
+      .replace(/<b[^>]*>(.*?)<\/b>/gi, "**$1**")
+      .replace(/<em[^>]*>(.*?)<\/em>/gi, "*$1*")
+      .replace(/<i[^>]*>(.*?)<\/i>/gi, "*$1*");
+
+    html = html.replace(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, "[$2]($1)");
+
+    html = html
+      .replace(/<h1[^>]*>(.*?)<\/h1>/gi, "\n# $1\n")
+      .replace(/<h2[^>]*>(.*?)<\/h2>/gi, "\n## $1\n")
+      .replace(/<h3[^>]*>(.*?)<\/h3>/gi, "\n### $1\n")
+      .replace(/<h4[^>]*>(.*?)<\/h4>/gi, "\n#### $1\n")
+      .replace(/<h5[^>]*>(.*?)<\/h5>/gi, "\n##### $1\n")
+      .replace(/<h6[^>]*>(.*?)<\/h6>/gi, "\n###### $1\n");
+
+    html = html.replace(/<ul[^>]*>([\s\S]*?)<\/ul>/gi, (_, content) =>
+      content.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, "- $1\n").replace(/<[^>]*>/g, "")
+    );
+    html = html.replace(/<ol[^>]*>([\s\S]*?)<\/ol>/gi, (_, content) => {
+      let counter = 1;
+      return content
+        .replace(
+          /<li[^>]*>([\s\S]*?)<\/li>/gi,
+          (_, item) => `${counter++}. ${item}\n`
+        )
+        .replace(/<[^>]*>/g, "");
+    });
+
+    html = html.replace(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/gi, (_, content) =>
+      `${content
+        .replace(/<[^>]*>/g, "")
+        .split("\n")
+        .map((line) => (line.trim() ? `> ${line}` : ">"))
+        .join("\n")}\n`
+    );
+
+    html = html.replace(/<hr[^>]*\/?>/gi, "\n---\n");
+
+    html = html
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n\n")
+      .replace(/<p[^>]*>/gi, "");
+
+    html = html.replace(/<[^>]+>/g, "");
+
+    html = html
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&nbsp;/g, " ");
+
+    html = html.replace(/\n\s*\n\s*\n/g, "\n\n").trim();
+
+    return html;
+  }
+
   async function injectToolbar() {
-    console.log("ChatGPT Exporter: Attempting to inject toolbar");
+    if (document.getElementById(EXPORTER_ID)) return;
+    if (!hasMessages()) return;
 
-    if (document.getElementById(EXPORTER_ID)) {
-      console.log("ChatGPT Exporter: Toolbar already exists");
-      return; // already present
-    }
-
-    // Only show toolbar if there are messages to export
-    if (!hasMessages()) {
-      console.log("ChatGPT Exporter: No messages found, hiding toolbar");
-      return;
-    }
-
-    // Find the text input container and voice button area
-    const textInput =
-      document.querySelector('textarea[data-testid="composer-text-input"]') ||
-      document.querySelector("form textarea") ||
-      document.querySelector("textarea");
-
+    const textInput = document.querySelector(SEL.inputSelector);
     if (!textInput) {
-      console.log("ChatGPT Exporter: Could not find text input");
+      console.log("Chat Exporter: Could not find text input");
       return;
     }
-
-    // Find the container with the voice button (usually has microphone icon)
-    const inputContainer = textInput.closest("form") || textInput.parentElement;
-
-    console.log("ChatGPT Exporter: Found text input, creating toolbar");
 
     const root = document.createElement("div");
     root.id = EXPORTER_ID;
+    root.setAttribute("data-platform", PLATFORM);
     root.innerHTML = `
-        <div class="gpt-main-controls">
-          <button id="gptSelBtn" class="gpt-btn">Select</button>
-          <button id="gptExpBtn" class="gpt-btn" style="display:none;">Export MD</button>
-        </div>
-        <div id="gptExpContainer" style="display:none;">
-          <div id="gptRoleControls" class="role-controls"></div>
-        </div>
-      `;
-
-    // Position the toolbar in the left margin
+      <div class="gpt-main-controls">
+        <button id="gptSelBtn" class="gpt-btn">Select</button>
+        <button id="gptExpBtn" class="gpt-btn" style="display:none;">Export MD</button>
+      </div>
+      <div id="gptExpContainer" style="display:none;">
+        <div id="gptRoleControls" class="role-controls"></div>
+      </div>
+    `;
     document.body.appendChild(root);
-    console.log("ChatGPT Exporter: Toolbar injected");
 
-    // handlers
     const selBtn = root.querySelector("#gptSelBtn");
     const expBtn = root.querySelector("#gptExpBtn");
     const expContainer = root.querySelector("#gptExpContainer");
-    const roleControls = root.querySelector("#gptRoleControls");
     let selecting = false;
 
     selBtn.addEventListener("click", () => {
-      console.log("ChatGPT Exporter: Select button clicked");
       selecting = !selecting;
       selBtn.textContent = selecting ? "Cancel" : "Select";
-
       if (selecting) {
         addCheckboxes();
-        expBtn.style.display = "inline-block"; // Show export button
+        expBtn.style.display = "inline-block";
         expContainer.style.display = "block";
         updateRoleControls();
-
-        // Scroll to first message for better UX
         setTimeout(() => {
-          const firstMessage = document.querySelector(msgSelector);
-          if (firstMessage) {
-            firstMessage.scrollIntoView({
-              behavior: "smooth",
-              block: "start",
-            });
-          }
+          const first = getMessageTurns()[0];
+          if (first) first.scrollIntoView({ behavior: "smooth", block: "start" });
         }, 100);
       } else {
         removeCheckboxes();
-        expBtn.style.display = "none"; // Hide export button
+        expBtn.style.display = "none";
         expContainer.style.display = "none";
-
-        // Scroll back to bottom when canceling
-        setTimeout(() => {
-          window.scrollTo({
-            top: document.body.scrollHeight,
-            behavior: "smooth",
-          });
-        }, 100);
+        setTimeout(
+          () => window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }),
+          100
+        );
       }
     });
 
-    expBtn.addEventListener("click", () => {
-      console.log("ChatGPT Exporter: Export button clicked");
-      exportMarkdown();
-    });
+    expBtn.addEventListener("click", exportMarkdown);
   }
 
-  // Helpers to find each message turn (adjust selector if OpenAI changes DOM)
-  const msgSelector = "div[data-message-author-role]";
-  // const msgSelector = 'div[data-testid="conversation-turn"]';
-
   function addCheckboxes() {
-    console.log("ChatGPT Exporter: Adding checkboxes");
-    const messages = document.querySelectorAll(msgSelector);
-    console.log(`ChatGPT Exporter: Found ${messages.length} messages`);
+    const turns = getMessageTurns();
+    turns.forEach((node, index) => {
+      if (node.querySelector(".gpt-turn-wrapper")) return;
 
-    messages.forEach((node, index) => {
-      if (node.querySelector(".gpt-turn-wrapper")) return; // Already has checkbox
-      // Create a wrapper for checkbox and controls
+      const role = SEL.role(node);
+      const roleIcon = role === "user" ? "👤" : role === "assistant" ? "🤖" : "?";
+      const displayRole = role === "assistant" ? SEL.assistantName : role.toUpperCase();
+
       const wrapper = document.createElement("div");
       wrapper.className = "gpt-turn-wrapper";
 
-      // Create checkbox
       const cbx = document.createElement("input");
       cbx.type = "checkbox";
       cbx.className = "gpt-turn-cbx";
@@ -151,24 +254,15 @@
       cbx.id = `gpt-cbx-${index}`;
       cbx.addEventListener("change", updateRoleControls);
 
-      // Create number label with role indicator
-      const role = node.getAttribute("data-message-author-role") || "unknown";
-      const roleIcon =
-        role === "user" ? "👤" : role === "assistant" ? "🤖" : "?";
-
-      const displayRole = role === "assistant" ? "ChatGPT" : role;
-
       const label = document.createElement("label");
       label.htmlFor = `gpt-cbx-${index}`;
       label.className = "gpt-turn-number";
       label.innerHTML = `${roleIcon}<br>${index + 1}`;
       label.title = `${displayRole} message #${index + 1}`;
 
-      // Create navigation arrows container
       const navContainer = document.createElement("div");
       navContainer.className = "gpt-nav-container";
 
-      // Up arrow (except for first message)
       if (index > 0) {
         const upArrow = document.createElement("button");
         upArrow.className = "gpt-nav-arrow gpt-nav-up";
@@ -180,9 +274,7 @@
         });
         navContainer.appendChild(upArrow);
       }
-
-      // Down arrow (except for last message)
-      if (index < messages.length - 1) {
+      if (index < turns.length - 1) {
         const downArrow = document.createElement("button");
         downArrow.className = "gpt-nav-arrow gpt-nav-down";
         downArrow.innerHTML = "↓";
@@ -198,13 +290,11 @@
       wrapper.appendChild(label);
       wrapper.appendChild(navContainer);
 
-      // Position relative to the actual chat message (not fixed overlay)
       node.style.position = "relative";
-      node.style.paddingLeft = "100px"; // Make room for checkbox in left margin
-
+      node.style.paddingLeft = "100px";
       wrapper.style.position = "absolute";
       wrapper.style.top = "8px";
-      wrapper.style.left = "-90px"; // Position in the margin to the left
+      wrapper.style.left = "-90px";
       wrapper.style.display = "flex";
       wrapper.style.alignItems = "center";
       wrapper.style.gap = "6px";
@@ -212,373 +302,177 @@
 
       node.appendChild(wrapper);
     });
-
-    // No need for scroll listeners with relative positioning
   }
 
-  // Scroll to a specific checkbox
   function scrollToCheckbox(index) {
-    const checkbox = document.querySelector(`#gpt-cbx-${index}`);
-    if (checkbox) {
-      const messageElement = checkbox.closest("[data-message-author-role]");
-      if (messageElement) {
-        // Use a more aggressive scroll approach for better positioning
-        messageElement.scrollIntoView({
-          behavior: "smooth",
-          block: "center",
-          inline: "nearest",
-        });
-
-        // Additional timeout to ensure proper positioning on long messages
-        setTimeout(() => {
-          checkbox.scrollIntoView({
-            behavior: "smooth",
-            block: "center",
-            inline: "nearest",
-          });
-        }, 300);
-      }
+    const cbx = document.querySelector(`#gpt-cbx-${index}`);
+    if (cbx) {
+      const turns = getMessageTurns();
+      const el = turns[index];
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
     }
   }
 
-  // Update role-based controls
-  function updateRoleControls() {
-    const roleControls = document.querySelector("#gptRoleControls");
-    if (!roleControls) return;
-
-    const messages = document.querySelectorAll(msgSelector);
-    let userCount = 0;
-    let chatgptCount = 0;
-    let userSelected = 0;
-    let chatgptSelected = 0;
-
-    messages.forEach((node, index) => {
-      const role = node.getAttribute("data-message-author-role") || "unknown";
-      const checkbox = document.querySelector(`#gpt-cbx-${index}`);
-
-      if (role === "user") {
-        userCount++;
-        if (checkbox && checkbox.checked) userSelected++;
-      } else if (role === "assistant") {
-        chatgptCount++;
-        if (checkbox && checkbox.checked) chatgptSelected++;
-      }
-    });
-
-    roleControls.innerHTML = `
-      <div class="role-summary">
-        <span>User: ${userSelected}/${userCount} 
-          (<a href="#" class="role-link" data-role="user" data-action="all">all</a> | 
-           <a href="#" class="role-link" data-role="user" data-action="none">none</a>)
-        </span>
-        <span>ChatGPT: ${chatgptSelected}/${chatgptCount}
-          (<a href="#" class="role-link" data-role="assistant" data-action="all">all</a> | 
-           <a href="#" class="role-link" data-role="assistant" data-action="none">none</a>)
-        </span>
-      </div>
-    `;
-
-    // Add event listeners for role links
-    roleControls.querySelectorAll(".role-link").forEach((link) => {
-      link.addEventListener("click", (e) => {
-        e.preventDefault();
-        const role = e.target.getAttribute("data-role");
-        const action = e.target.getAttribute("data-action");
-
-        if (action === "all") {
-          selectRoleAll(role);
-        } else if (action === "none") {
-          selectRoleNone(role);
-        }
-      });
-    });
-  }
-
-  // Select all messages for a specific role
-  window.selectRoleAll = function (role) {
-    const messages = document.querySelectorAll(msgSelector);
-    messages.forEach((node, index) => {
-      const nodeRole = node.getAttribute("data-message-author-role");
-      if (nodeRole === role) {
-        const checkbox = document.querySelector(`#gpt-cbx-${index}`);
-        if (checkbox) {
-          checkbox.checked = true;
-        }
-      }
-    });
-    updateRoleControls();
-  };
-
-  // Select no messages for a specific role
-  window.selectRoleNone = function (role) {
-    const messages = document.querySelectorAll(msgSelector);
-    messages.forEach((node, index) => {
-      const nodeRole = node.getAttribute("data-message-author-role");
-      if (nodeRole === role) {
-        const checkbox = document.querySelector(`#gpt-cbx-${index}`);
-        if (checkbox) {
-          checkbox.checked = false;
-        }
-      }
-    });
-    updateRoleControls();
-  };
-
   function removeCheckboxes() {
-    console.log("ChatGPT Exporter: Removing checkboxes");
-
-    // Remove wrapper elements and reset padding
     document.querySelectorAll(".gpt-turn-wrapper").forEach((wrapper) => {
       const parent = wrapper.parentElement;
       if (parent) {
-        parent.style.paddingLeft = ""; // Reset padding
-        parent.style.position = ""; // Reset position
+        parent.style.paddingLeft = "";
+        parent.style.position = "";
       }
       wrapper.remove();
     });
   }
 
-  function htmlToMarkdown(html) {
-    // Enhanced HTML to Markdown conversion
-    let markdown = html
-      // Preserve code blocks first (before other processing)
-      .replace(/<pre><code[^>]*>([\s\S]*?)<\/code><\/pre>/gi, (match, code) => {
-        return "\n```\n" + code.replace(/<[^>]*>/g, "").trim() + "\n```\n";
-      })
+  function updateRoleControls() {
+    const roleControls = document.querySelector("#gptRoleControls");
+    if (!roleControls) return;
 
-      // Inline code
-      .replace(/<code[^>]*>(.*?)<\/code>/gi, "`$1`")
+    const turns = getMessageTurns();
+    let userCount = 0;
+    let assistantCount = 0;
+    let userSelected = 0;
+    let assistantSelected = 0;
 
-      // Bold and italic
-      .replace(/<strong[^>]*>(.*?)<\/strong>/gi, "**$1**")
-      .replace(/<b[^>]*>(.*?)<\/b>/gi, "**$1**")
-      .replace(/<em[^>]*>(.*?)<\/em>/gi, "*$1*")
-      .replace(/<i[^>]*>(.*?)<\/i>/gi, "*$1*")
+    turns.forEach((node, index) => {
+      const role = SEL.role(node);
+      const cbx = document.querySelector(`#gpt-cbx-${index}`);
+      if (role === "user") {
+        userCount++;
+        if (cbx && cbx.checked) userSelected++;
+      } else if (role === "assistant") {
+        assistantCount++;
+        if (cbx && cbx.checked) assistantSelected++;
+      }
+    });
 
-      // Links
-      .replace(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, "[$2]($1)")
+    const assistantLabel =
+      SEL.assistantName.charAt(0) + SEL.assistantName.slice(1).toLowerCase();
 
-      // Headers
-      .replace(/<h1[^>]*>(.*?)<\/h1>/gi, "# $1\n")
-      .replace(/<h2[^>]*>(.*?)<\/h2>/gi, "## $1\n")
-      .replace(/<h3[^>]*>(.*?)<\/h3>/gi, "### $1\n")
-      .replace(/<h4[^>]*>(.*?)<\/h4>/gi, "#### $1\n")
+    roleControls.innerHTML = `
+      <div class="role-summary">
+        <span>User: ${userSelected}/${userCount}
+          (<a href="#" class="role-link" data-role="user" data-action="all">all</a> |
+           <a href="#" class="role-link" data-role="user" data-action="none">none</a>)
+        </span>
+        <span>${assistantLabel}: ${assistantSelected}/${assistantCount}
+          (<a href="#" class="role-link" data-role="assistant" data-action="all">all</a> |
+           <a href="#" class="role-link" data-role="assistant" data-action="none">none</a>)
+        </span>
+      </div>
+    `;
 
-      // Lists
-      .replace(/<ul[^>]*>([\s\S]*?)<\/ul>/gi, (match, content) => {
-        return content
-          .replace(/<li[^>]*>(.*?)<\/li>/gi, "- $1\n")
-          .replace(/<[^>]*>/g, "");
-      })
-      .replace(/<ol[^>]*>([\s\S]*?)<\/ol>/gi, (match, content) => {
-        let counter = 1;
-        return content
-          .replace(/<li[^>]*>(.*?)<\/li>/gi, () => `${counter++}. $1\n`)
-          .replace(/<[^>]*>/g, "");
-      })
-
-      // Blockquotes
-      .replace(
-        /<blockquote[^>]*>([\s\S]*?)<\/blockquote>/gi,
-        (match, content) => {
-          return (
-            content
-              .replace(/<[^>]*>/g, "")
-              .split("\n")
-              .map((line) => (line.trim() ? "> " + line : ">"))
-              .join("\n") + "\n"
-          );
-        }
-      )
-
-      // Line breaks and paragraphs
-      .replace(/<br\s*\/?>/gi, "\n")
-      .replace(/<\/p>/gi, "\n\n")
-      .replace(/<p[^>]*>/gi, "")
-
-      // Remove remaining HTML tags
-      .replace(/<[^>]+>/g, "")
-
-      // Clean up extra whitespace
-      .replace(/\n\s*\n\s*\n/g, "\n\n") // Max 2 consecutive newlines
-      .replace(/^\s+|\s+$/g, "") // Trim start/end
-      .trim();
-
-    return markdown;
+    roleControls.querySelectorAll(".role-link").forEach((link) => {
+      link.addEventListener("click", (e) => {
+        e.preventDefault();
+        const role = e.target.getAttribute("data-role");
+        const action = e.target.getAttribute("data-action");
+        selectRole(role, action === "all");
+      });
+    });
   }
 
-  function getConversationTitle() {
-    // Title appears in the sidebar & <title>
-    const h1 =
-      document.querySelector('h1[data-testid="conversation-title"]') ||
-      document.querySelector("h1") ||
-      document.querySelector('[data-testid*="title"]');
-    return (
-      (h1 ? h1.textContent : document.title.replace(" – ChatGPT", "")) ||
-      "ChatGPT Conversation"
-    );
+  function selectRole(role, checked) {
+    getMessageTurns().forEach((node, index) => {
+      if (SEL.role(node) === role) {
+        const cbx = document.querySelector(`#gpt-cbx-${index}`);
+        if (cbx) cbx.checked = checked;
+      }
+    });
+    updateRoleControls();
   }
 
   function exportMarkdown() {
-    console.log("ChatGPT Exporter: Starting export");
-
-    const selected = Array.from(document.querySelectorAll(msgSelector)).filter(
-      (n) => {
-        const wrapper = n.querySelector(".gpt-turn-wrapper");
-        if (!wrapper) return true; // If no checkboxes, include all
-        const cbx = wrapper.querySelector("input.gpt-turn-cbx");
-        return cbx && cbx.checked;
-      }
-    );
-
-    console.log(`ChatGPT Exporter: Found ${selected.length} selected messages`);
+    const turns = getMessageTurns();
+    const selected = turns.filter((n, i) => {
+      const wrapper = n.querySelector(".gpt-turn-wrapper");
+      if (!wrapper) return true;
+      const cbx = wrapper.querySelector("input.gpt-turn-cbx");
+      return cbx && cbx.checked;
+    });
 
     if (!selected.length) {
-      alert("No turns selected – click Select first.");
+      alert("No turns selected - click Select first.");
       return;
     }
 
-    const title = getConversationTitle();
+    const title = SEL.titleFn();
     const ts = new Date().toLocaleString();
-
     let md = `# ${title}\n\n_Exported: ${ts}_\n\n`;
+
     selected.forEach((el) => {
-      const roleEl =
-        el.querySelector('[data-testid="conversation-turn-author-role"]') ||
-        el.querySelector("[data-message-author-role]");
+      const role = SEL.role(el);
+      const roleLabel = role === "assistant" ? SEL.assistantName : role.toUpperCase();
 
-      let role = roleEl
-        ? roleEl.textContent.trim()
-        : el.getAttribute("data-message-author-role") || "Message";
-
-      // Replace "assistant" with "ChatGPT" and make role ALL CAPS
-      if (role.toLowerCase() === "assistant") {
-        role = "CHATGPT";
+      let bodyHTML;
+      if (PLATFORM === "claude") {
+        bodyHTML = extractClaudeText(el);
       } else {
-        role = role.toUpperCase();
+        const textEl = SEL.textContainer(el);
+        bodyHTML = textEl ? textEl.innerHTML : "(no text)";
       }
 
-      const textEl =
-        el.querySelector(".markdown, .whitespace-pre-wrap, .prose") ||
-        el.querySelector('div[class*="markdown"]') ||
-        el;
-
-      const body = textEl ? htmlToMarkdown(textEl.innerHTML) : "(no text)";
-      md += `## ${role}\n\n${body}\n\n`;
+      const body = htmlToMarkdown(bodyHTML);
+      md += `## ${roleLabel}\n\n${body}\n\n`;
     });
 
     const blob = new Blob([md], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
-
     const fnameSafe = title.replace(/[^\w\d_-]+/g, "-");
     const a = document.createElement("a");
     a.href = url;
-    a.download = `ChatGPT-${fnameSafe}.md`;
+    a.download = `${SEL.filePrefix}-${fnameSafe}.md`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 5000);
-
-    console.log("ChatGPT Exporter: Export completed");
   }
 
-  // Detect SPA navigation (URL changes without page reload)
   let currentUrl = window.location.href;
   let contentCheckInterval;
 
   function onNavigationChange() {
     const newUrl = window.location.href;
-    if (newUrl !== currentUrl) {
-      console.log(
-        "ChatGPT Exporter: Navigation detected",
-        currentUrl,
-        "→",
-        newUrl
-      );
-      currentUrl = newUrl;
+    if (newUrl === currentUrl) return;
+    currentUrl = newUrl;
 
-      // Remove existing toolbar and re-inject after navigation
-      const existing = document.getElementById(EXPORTER_ID);
-      if (existing) {
-        existing.remove();
-        console.log(
-          "ChatGPT Exporter: Removed existing toolbar for re-injection"
-        );
-      }
+    const existing = document.getElementById(EXPORTER_ID);
+    if (existing) existing.remove();
+    if (contentCheckInterval) clearInterval(contentCheckInterval);
 
-      // Clear any existing interval
-      if (contentCheckInterval) {
+    setTimeout(tryInject, 300);
+    setTimeout(tryInject, 800);
+    setTimeout(tryInject, 1500);
+
+    contentCheckInterval = setInterval(() => {
+      if (hasMessages() && !document.getElementById(EXPORTER_ID)) {
+        tryInject();
         clearInterval(contentCheckInterval);
       }
+    }, 1000);
 
-      // Use multiple strategies to detect when content is ready
-      setTimeout(() => tryInject(), 300);
-      setTimeout(() => tryInject(), 800);
-      setTimeout(() => tryInject(), 1500);
-
-      // Polling fallback for stubborn cases
-      contentCheckInterval = setInterval(() => {
-        if (hasMessages() && !document.getElementById(EXPORTER_ID)) {
-          console.log("ChatGPT Exporter: Polling detected content ready");
-          tryInject();
-          clearInterval(contentCheckInterval);
-        }
-      }, 1000);
-
-      // Clear polling after reasonable time
-      setTimeout(() => {
-        if (contentCheckInterval) {
-          clearInterval(contentCheckInterval);
-          contentCheckInterval = null;
-        }
-      }, 10000);
-    }
+    setTimeout(() => {
+      if (contentCheckInterval) {
+        clearInterval(contentCheckInterval);
+        contentCheckInterval = null;
+      }
+    }, 10000);
   }
 
-  // Try multiple strategies to inject the toolbar
   function tryInject() {
-    console.log("ChatGPT Exporter: Trying injection strategies");
-
-    // Strategy 1: Wait for main element
-    waitForEl("main")
-      .then(() => {
-        console.log("ChatGPT Exporter: Main element found");
-        return injectToolbar();
-      })
-      .catch((err) => {
-        console.error("ChatGPT Exporter: Strategy 1 failed", err);
-
-        // Strategy 2: Wait a bit and try again
-        setTimeout(() => {
-          console.log("ChatGPT Exporter: Trying delayed injection");
-          injectToolbar();
-        }, 2000);
-      });
+    waitForEl("main, [data-testid='chat-input-grid-container'], form")
+      .then(() => injectToolbar())
+      .catch(() => setTimeout(injectToolbar, 2000));
   }
 
-  // -------------- boot ---------------
-  console.log("ChatGPT Exporter: Starting boot process");
-
-  // Set up SPA navigation detection
-  const observer = new MutationObserver(() => {
-    onNavigationChange();
-  });
-
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true,
-  });
-
-  // Also listen for popstate (back/forward buttons)
+  const navObserver = new MutationObserver(onNavigationChange);
+  navObserver.observe(document.body, { childList: true, subtree: true });
   window.addEventListener("popstate", onNavigationChange);
 
-  // Try immediately if DOM is ready
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", tryInject);
   } else {
     tryInject();
   }
-
-  // Also try after a delay for initial load
   setTimeout(tryInject, 1000);
 })();

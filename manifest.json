@@ -1,19 +1,24 @@
-// ──────────────────────────────
-// File: manifest.json
-// ──────────────────────────────
 {
   "manifest_version": 3,
-  "name": "ChatGPT Local Exporter",
-  "version": "0.1.0",
-  "description": "Adds a tiny overlay that lets you bulk‑select turns in any ChatGPT thread and save them to a Markdown file – no servers, no telemetry.",
+  "name": "Chat Local Exporter",
+  "version": "0.2.0",
+  "description": "Export ChatGPT and Claude conversations to Markdown files - 100% client-side, no telemetry.",
   "icons": {
     "128": "icon128.png"
   },
   "permissions": ["activeTab"],
-  "host_permissions": ["https://chat.openai.com/*", "https://chatgpt.com/*"],
+  "host_permissions": [
+    "https://chat.openai.com/*",
+    "https://chatgpt.com/*",
+    "https://claude.ai/*"
+  ],
   "content_scripts": [
     {
-      "matches": ["https://chat.openai.com/*", "https://chatgpt.com/*"],
+      "matches": [
+        "https://chat.openai.com/*",
+        "https://chatgpt.com/*",
+        "https://claude.ai/*"
+      ],
       "js": ["content.js"],
       "css": ["style.css"],
       "run_at": "document_idle"
