@@ -75,6 +75,103 @@ const CLAUDE_FIXTURE = `<!doctype html>
   </body>
 </html>`;
 
+const GROK_FIXTURE = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Friendly greeting - Grok</title>
+  </head>
+  <body>
+    <main>
+      <div id="response-user-1" class="relative group flex flex-col justify-center w-full max-w-[var(--content-max-width)] pb-0.5 items-end">
+        <div class="message-bubble relative rounded-3xl text-primary bg-surface-l1 border border-border-l1 max-w-[100%] px-4 rounded-br-lg">
+          <div class="relative">
+            <p class="break-words">Reply with exactly: hi</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="response-assistant-1" class="relative group flex flex-col justify-center w-full max-w-[var(--content-max-width)] pb-0.5 items-start">
+        <div class="message-bubble relative rounded-3xl text-primary min-h-7 prose break-words w-full max-w-none">
+          <div class="relative">
+            <div class="thinking-container mb-3">
+              <button>Thought for 1s</button>
+            </div>
+            <div class="relative">
+              <p>hi</p>
+              <pre><code>console.log("done");</code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <div class="composer-shell">
+      <div class="ProseMirror" contenteditable="true">
+        <p><br /></p>
+      </div>
+      <button aria-label="Submit">Submit</button>
+    </div>
+  </body>
+</html>`;
+
+const GEMINI_FIXTURE = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Google Gemini</title>
+  </head>
+  <body>
+    <chat-app>
+      <bard-sidenav-content>
+        <button aria-current="page">Scanner App Financial Metrics</button>
+      </bard-sidenav-content>
+      <main>
+        <chat-window>
+          <chat-window-content>
+            <user-query>
+              <div class="user-query-text">
+                <p>Plan a 2-day Zurich itinerary.</p>
+              </div>
+            </user-query>
+
+            <model-response>
+              <div class="response-container">
+                <div class="message-content">
+                  <p>Here is a simple plan:</p>
+                  <ol>
+                    <li>Old Town walk</li>
+                    <li>Lake Zurich cruise</li>
+                  </ol>
+                  <pre><code>day1 = "Old Town"</code></pre>
+                </div>
+                <button aria-label="Good response">Like</button>
+              </div>
+            </model-response>
+          </chat-window-content>
+
+          <input-container>
+            <input-area-v2>
+              <rich-textarea>
+                <div
+                  class="ql-editor textarea new-input-ui"
+                  contenteditable="true"
+                  role="textbox"
+                  aria-label="Enter a prompt for Gemini"
+                >
+                  <p><br /></p>
+                </div>
+                <div class="ql-clipboard" contenteditable="true" tabindex="-1"></div>
+              </rich-textarea>
+              <button aria-label="Send message">Send</button>
+            </input-area-v2>
+          </input-container>
+        </chat-window>
+      </main>
+    </chat-app>
+  </body>
+</html>`;
+
 async function mountExporter(page) {
   await page.addStyleTag({ path: path.join(ROOT, "style.css") });
   await page.addScriptTag({ path: path.join(ROOT, "content.js") });
@@ -154,4 +251,71 @@ test("exports Claude mocked conversation and keeps final assistant markdown only
   expect(markdown).toContain("Final answer: done.");
   expect(markdown).toContain('print("ok")');
   expect(markdown).not.toContain("Intermediate tool output that should not be exported.");
+});
+
+test("exports Grok mocked conversation and strips thinking blocks", async ({ page }, testInfo) => {
+  await page.route("https://grok.com/**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: GROK_FIXTURE,
+    });
+  });
+
+  await page.goto("https://grok.com/c/mock-thread");
+  await mountExporter(page);
+
+  await expect(page.locator("#__gpt_local_exporter[data-platform='grok']")).toBeVisible();
+  await page.click("#gptSelBtn");
+  await expect(page.locator(".gpt-turn-cbx")).toHaveCount(2);
+  await expect(page.locator("#gptRoleControls")).toContainText("Grok:");
+
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.click("#gptExpBtn"),
+  ]);
+
+  expect(download.suggestedFilename()).toMatch(/^Grok-/);
+  const markdown = await saveDownload(download, testInfo.outputDir);
+
+  expect(markdown).toContain("# Friendly greeting");
+  expect(markdown).toContain("## USER");
+  expect(markdown).toContain("## GROK");
+  expect(markdown).toContain("Reply with exactly: hi");
+  expect(markdown).toContain("console.log(\"done\");");
+  expect(markdown).not.toContain("Thought for 1s");
+});
+
+test("exports Gemini mocked conversation using custom element selectors", async ({ page }, testInfo) => {
+  await page.route("https://gemini.google.com/**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: GEMINI_FIXTURE,
+    });
+  });
+
+  await page.goto("https://gemini.google.com/app/mock-thread");
+  await mountExporter(page);
+
+  await expect(page.locator("#__gpt_local_exporter[data-platform='gemini']")).toBeVisible();
+  await page.click("#gptSelBtn");
+  await expect(page.locator(".gpt-turn-cbx")).toHaveCount(2);
+  await expect(page.locator("#gptRoleControls")).toContainText("Gemini:");
+
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.click("#gptExpBtn"),
+  ]);
+
+  expect(download.suggestedFilename()).toMatch(/^Gemini-/);
+  const markdown = await saveDownload(download, testInfo.outputDir);
+
+  expect(markdown).toContain("# Scanner App Financial Metrics");
+  expect(markdown).toContain("## USER");
+  expect(markdown).toContain("## GEMINI");
+  expect(markdown).toContain("Plan a 2-day Zurich itinerary.");
+  expect(markdown).toContain("1. Old Town walk");
+  expect(markdown).toContain("2. Lake Zurich cruise");
+  expect(markdown).toContain('day1 = "Old Town"');
 });

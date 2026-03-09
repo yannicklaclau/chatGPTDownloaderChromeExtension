@@ -1,6 +1,6 @@
 # Chat Local Exporter
 
-A Chrome extension that exports ChatGPT and Claude conversations to Markdown with selective message filtering.
+A Chrome extension that exports ChatGPT, Claude, Grok, and Gemini conversations to Markdown with selective message filtering.
 
 ## Features
 
@@ -8,7 +8,7 @@ A Chrome extension that exports ChatGPT and Claude conversations to Markdown wit
 - **Role-Based Controls**: Separate selection for User and assistant messages.
 - **Enhanced Markdown**: Preserves formatting, links, code blocks, and structure.
 - **Navigation Tools**: Up/down arrows to jump between messages.
-- **Platform-aware UI**: Green controls on ChatGPT, orange controls on Claude.
+- **Platform-aware UI**: Platform-specific floating controls for ChatGPT, Claude, Grok, and Gemini.
 - **100% Client-Side**: No data leaves your machine.
 
 ## Installation
@@ -17,7 +17,7 @@ A Chrome extension that exports ChatGPT and Claude conversations to Markdown wit
 2. Open Chrome and go to `chrome://extensions/`.
 3. Enable **Developer Mode** (top-right toggle).
 4. Click **Load unpacked** and select this folder.
-5. Open a conversation on `chatgpt.com` or `claude.ai`.
+5. Open a conversation on `chatgpt.com`, `claude.ai`, `grok.com`, or `gemini.google.com`.
 
 ## Usage
 
@@ -49,20 +49,36 @@ Run this checklist after loading or reloading the extension.
 4. Use role links (`all` / `none`) and confirm counts update correctly.
 5. Click **Export MD** and confirm `Claude-<title>.md` downloads.
 
-### 3) Claude multi-markdown edge case
+### 3) Grok smoke test
+
+1. Open an existing thread on `grok.com`.
+2. Confirm the toolbar appears near the lower-left edge.
+3. Click **Select** and confirm each turn has checkbox + number.
+4. Export and confirm the file is named `Grok-<title>.md`.
+5. Confirm the exported response omits Grok's visible "thinking" block and keeps the final answer/code.
+
+### 4) Gemini smoke test
+
+1. Open an existing thread on `gemini.google.com`.
+2. Confirm the toolbar appears near the lower-left edge.
+3. Click **Select** and confirm user and Gemini turns are selectable.
+4. Export and confirm the file is named `Gemini-<title>.md`.
+5. Confirm the exported response preserves lists and code blocks.
+
+### 5) Claude multi-markdown edge case
 
 1. Use a prompt that triggers web/tool usage and then a final answer.
 2. Export the thread.
 3. Confirm the assistant export contains the final answer content rather than intermediate tool blocks.
 
-### 4) SPA navigation regression
+### 6) SPA navigation regression
 
 1. In each platform, switch between two threads without full reload.
 2. Confirm toolbar reappears and export still works in the new thread.
 
 ## Automated Tests (Playwright)
 
-The repo includes Playwright smoke tests that use mocked `chatgpt.com` and `claude.ai` DOM pages.
+The repo includes Playwright smoke tests that use mocked `chatgpt.com`, `claude.ai`, `grok.com`, and `gemini.google.com` DOM pages.
 
 1. Install dependencies:
    - `npm install`

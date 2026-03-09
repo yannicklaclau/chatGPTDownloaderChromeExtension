@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Chat Local Exporter",
-  "version": "0.2.0",
-  "description": "Export ChatGPT and Claude conversations to Markdown files - 100% client-side, no telemetry.",
+  "version": "0.3.0",
+  "description": "Export ChatGPT, Claude, Grok, and Gemini conversations to Markdown files - 100% client-side, no telemetry.",
   "icons": {
     "128": "icon128.png"
   },
@@ -10,14 +10,18 @@
   "host_permissions": [
     "https://chat.openai.com/*",
     "https://chatgpt.com/*",
-    "https://claude.ai/*"
+    "https://claude.ai/*",
+    "https://grok.com/*",
+    "https://gemini.google.com/*"
   ],
   "content_scripts": [
     {
       "matches": [
         "https://chat.openai.com/*",
         "https://chatgpt.com/*",
-        "https://claude.ai/*"
+        "https://claude.ai/*",
+        "https://grok.com/*",
+        "https://gemini.google.com/*"
       ],
       "js": ["content.js"],
       "css": ["style.css"],

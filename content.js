@@ -1,22 +1,61 @@
-// File: content.js (v0.2 - ChatGPT + Claude)
+// File: content.js (v0.3 - ChatGPT + Claude + Grok + Gemini)
 (function () {
-  const PLATFORM = window.location.hostname.includes("claude.ai")
-    ? "claude"
-    : "chatgpt";
-  console.log(`Chat Exporter: Loaded on platform = ${PLATFORM}`);
-
   const EXPORTER_ID = "__gpt_local_exporter";
 
-  const SELECTORS = {
+  function byDomOrder(a, b) {
+    if (a === b) return 0;
+    const pos = a.compareDocumentPosition(b);
+    return pos & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+  }
+
+  function pickFirst(root, selectors) {
+    for (const selector of selectors) {
+      const match = root.querySelector(selector);
+      if (match) return match;
+    }
+    return null;
+  }
+
+  function cloneWithout(root, selectors) {
+    const clone = root.cloneNode(true);
+    selectors.forEach((selector) => {
+      clone.querySelectorAll(selector).forEach((node) => node.remove());
+    });
+    return clone;
+  }
+
+  function textContent(el) {
+    return (el ? el.textContent || el.innerText || "" : "").replace(/\s+/g, " ").trim();
+  }
+
+  function pickFirstText(root, selectors, predicate = null) {
+    for (const selector of selectors) {
+      const nodes = root.querySelectorAll(selector);
+      for (const node of nodes) {
+        const value = textContent(node);
+        if (!value) continue;
+        if (!predicate || predicate(value, node)) return value;
+      }
+    }
+    return "";
+  }
+
+  function shortenTitle(value, maxLength = 80) {
+    const normalized = value.replace(/\s+/g, " ").trim();
+    if (!normalized) return "";
+    return normalized.length <= maxLength
+      ? normalized
+      : `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
+  }
+
+  const PLATFORMS = {
     chatgpt: {
-      msgSelector: "div[data-message-author-role]",
-      roleAttr: "data-message-author-role",
-      textContainer: (el) =>
-        el.querySelector(".markdown, .whitespace-pre-wrap, .prose, div[class*='markdown']") ||
-        el,
-      role: (el) => el.getAttribute("data-message-author-role") || "message",
+      matches: (host) => host === "chatgpt.com" || host === "chat.openai.com",
       inputSelector:
         'textarea[data-testid="composer-text-input"], form textarea, textarea',
+      readySelector: "main, form, textarea",
+      assistantName: "CHATGPT",
+      filePrefix: "ChatGPT",
       titleFn: () => {
         const h1 =
           document.querySelector('h1[data-testid="conversation-title"]') ||
@@ -27,16 +66,21 @@
           "ChatGPT Conversation"
         );
       },
-      filePrefix: "ChatGPT",
-      assistantName: "CHATGPT",
+      getTurns: () => [...document.querySelectorAll("div[data-message-author-role]")],
+      getRole: (el) => el.getAttribute("data-message-author-role") || "message",
+      extractHTML: (el) => {
+        const textEl =
+          el.querySelector(".markdown, .whitespace-pre-wrap, .prose, div[class*='markdown']") ||
+          el;
+        return textEl ? textEl.innerHTML : "(no text)";
+      },
     },
     claude: {
-      msgSelector: "[data-test-render-count]",
-      roleAttr: null,
-      textContainer: null,
-      role: (el) =>
-        el.querySelector('[data-testid="user-message"]') ? "user" : "assistant",
+      matches: (host) => host === "claude.ai",
       inputSelector: '[data-testid="chat-input"], [data-testid="chat-input-ssr"]',
+      readySelector: "main, [data-testid='chat-input'], [data-testid='chat-input-ssr']",
+      assistantName: "CLAUDE",
+      filePrefix: "Claude",
       titleFn: () => {
         const btn = document.querySelector('[data-testid="chat-title-button"]');
         return (
@@ -44,19 +88,172 @@
           "Claude Conversation"
         );
       },
-      filePrefix: "Claude",
-      assistantName: "CLAUDE",
+      getTurns: () =>
+        [...document.querySelectorAll("[data-test-render-count]")].filter(
+          (el) =>
+            el.querySelector('[data-testid="user-message"]') ||
+            el.querySelector(".font-claude-response")
+        ),
+      getRole: (el) =>
+        el.querySelector('[data-testid="user-message"]') ? "user" : "assistant",
+      extractHTML: (el) => {
+        const isUser = !!el.querySelector('[data-testid="user-message"]');
+
+        if (isUser) {
+          const userMsg = el.querySelector('[data-testid="user-message"]');
+          return userMsg ? userMsg.innerHTML : "(no text)";
+        }
+
+        const responseContainer = el.querySelector(".font-claude-response");
+        if (!responseContainer) return "(no text)";
+
+        const markdowns = responseContainer.querySelectorAll(".standard-markdown");
+        if (!markdowns.length) return responseContainer.innerHTML;
+
+        const lastMd = markdowns[markdowns.length - 1];
+        return lastMd.innerHTML;
+      },
+    },
+    grok: {
+      matches: (host) => host === "grok.com",
+      inputSelector:
+        '.ProseMirror[contenteditable="true"], [contenteditable="true"][data-placeholder], [contenteditable="true"]',
+      readySelector: 'main, .ProseMirror, [aria-label="Submit"]',
+      assistantName: "GROK",
+      filePrefix: "Grok",
+      titleFn: () =>
+        document.title.replace(/\s*-\s*Grok$/, "").trim() || "Grok Conversation",
+      getTurns: () =>
+        [...document.querySelectorAll('main [id^="response-"]')]
+          .filter((el) => el.querySelector(".message-bubble"))
+          .sort(byDomOrder),
+      getRole: (el) => (el.className.includes("items-end") ? "user" : "assistant"),
+      extractHTML: (el) => {
+        const bubble = el.querySelector(".message-bubble");
+        if (!bubble) return "(no text)";
+
+        const cleaned = cloneWithout(bubble, [
+          ".thinking-container",
+          "button",
+          "svg",
+          "[aria-hidden='true']",
+        ]);
+
+        return cleaned.innerHTML || cleaned.textContent || "(no text)";
+      },
+    },
+    gemini: {
+      matches: (host) => host === "gemini.google.com",
+      inputSelector:
+        'rich-textarea [role="textbox"], .ql-editor[role="textbox"][aria-label*="Gemini"], [aria-label="Enter a prompt for Gemini"]',
+      readySelector: "chat-app, rich-textarea, .ql-editor[role='textbox']",
+      assistantName: "GEMINI",
+      filePrefix: "Gemini",
+      titleFn: () => {
+        const sidebarTitle = pickFirstText(
+          document,
+          [
+            '[aria-current="page"]',
+            '[aria-selected="true"]',
+            '[data-test-id*="conversation"]',
+            '[data-test-id*="title"]',
+            '.conversation-title',
+            '.conversation-item-title',
+          ],
+          (value) =>
+            !/^google gemini$/i.test(value) &&
+            !/^gemini$/i.test(value) &&
+            !/^new chat$/i.test(value)
+        );
+        if (sidebarTitle) return shortenTitle(sidebarTitle);
+
+        const firstUserPrompt = pickFirstText(document, [
+          "user-query",
+          ".user-query-text",
+          ".user-prompt-chip",
+          '[data-test-id="user-query"]',
+        ]);
+        if (firstUserPrompt) return shortenTitle(firstUserPrompt);
+
+        const title = document.title
+          .replace(/\s*-\s*Gemini$/, "")
+          .replace(/^Google Gemini$/i, "")
+          .trim();
+        return title || "Gemini Conversation";
+      },
+      getTurns: () => {
+        const explicitTurns = [
+          ...document.querySelectorAll("user-query, model-response"),
+        ].sort(byDomOrder);
+        if (explicitTurns.length) return explicitTurns;
+
+        return [...document.querySelectorAll("assistant-messages-primary")]
+          .filter((el) => !el.closest("zero-state-block-picker, modular-zero-state"))
+          .sort(byDomOrder);
+      },
+      getRole: (el) =>
+        el.tagName.toLowerCase() === "user-query" ? "user" : "assistant",
+      extractHTML: (el) => {
+        const tag = el.tagName.toLowerCase();
+        const cleaned = cloneWithout(el, [
+          "button",
+          "mat-icon",
+          "user-profile-picture",
+          "hallucination-disclaimer",
+          "speech-dictation-mic-button",
+          "toolbox-drawer",
+          "bard-mode-switcher",
+        ]);
+
+        if (tag === "user-query") {
+          const content = pickFirst(cleaned, [
+            '[data-test-id="user-query"]',
+            ".query-text",
+            ".user-query-text",
+            ".message-text",
+            ".user-prompt-chip",
+            "p",
+          ]);
+          return content ? content.innerHTML || content.textContent : cleaned.innerHTML;
+        }
+
+        const assistantContent = pickFirst(cleaned, [
+          ".message-content",
+          ".model-response-text",
+          ".response-container",
+          "generative-ui-response",
+          '[data-test-id="message"]',
+          ".message-text",
+          ".markdown",
+          "p",
+        ]);
+
+        return assistantContent
+          ? assistantContent.innerHTML || assistantContent.textContent
+          : cleaned.innerHTML || cleaned.textContent || "(no text)";
+      },
     },
   };
 
-  const SEL = SELECTORS[PLATFORM];
+  function detectPlatform() {
+    const host = window.location.hostname;
+    return (
+      Object.entries(PLATFORMS).find(([, platform]) => platform.matches(host)) || []
+    )[0];
+  }
 
-  const waitForEl = (sel) =>
+  const PLATFORM = detectPlatform();
+  if (!PLATFORM) return;
+
+  const SEL = PLATFORMS[PLATFORM];
+  console.log(`Chat Exporter: Loaded on platform = ${PLATFORM}`);
+
+  const waitForEl = (selector) =>
     new Promise((res) => {
-      const found = document.querySelector(sel);
+      const found = document.querySelector(selector);
       if (found) return res(found);
       const obs = new MutationObserver(() => {
-        const n = document.querySelector(sel);
+        const n = document.querySelector(selector);
         if (n) {
           obs.disconnect();
           res(n);
@@ -66,36 +263,11 @@
     });
 
   function getMessageTurns() {
-    const all = document.querySelectorAll(SEL.msgSelector);
-    if (PLATFORM === "chatgpt") return [...all];
-
-    return [...all].filter(
-      (el) =>
-        el.querySelector('[data-testid="user-message"]') ||
-        el.querySelector(".font-claude-response")
-    );
+    return SEL.getTurns();
   }
 
   function hasMessages() {
     return getMessageTurns().length > 0;
-  }
-
-  function extractClaudeText(turnEl) {
-    const isUser = !!turnEl.querySelector('[data-testid="user-message"]');
-
-    if (isUser) {
-      const userMsg = turnEl.querySelector('[data-testid="user-message"]');
-      return userMsg ? userMsg.innerHTML : "(no text)";
-    }
-
-    const responseContainer = turnEl.querySelector(".font-claude-response");
-    if (!responseContainer) return "(no text)";
-
-    const markdowns = responseContainer.querySelectorAll(".standard-markdown");
-    if (!markdowns.length) return responseContainer.innerHTML;
-
-    const lastMd = markdowns[markdowns.length - 1];
-    return lastMd.innerHTML;
   }
 
   function htmlToMarkdown(html) {
@@ -204,6 +376,25 @@
     `;
     document.body.appendChild(root);
 
+    const resizeController = new AbortController();
+    const updateToolbarPosition = () => {
+      if (PLATFORM !== "grok" && PLATFORM !== "gemini") return;
+
+      const anchor = getMessageTurns()[0] || document.querySelector(SEL.inputSelector);
+      if (!anchor) return;
+
+      const rect = anchor.getBoundingClientRect();
+      const minLeft = 24;
+      const maxLeft = Math.max(minLeft, window.innerWidth - root.offsetWidth - 24);
+      const desiredLeft = Math.round(rect.left - 120);
+      root.style.left = `${Math.min(maxLeft, Math.max(minLeft, desiredLeft))}px`;
+    };
+    updateToolbarPosition();
+    window.addEventListener("resize", updateToolbarPosition, {
+      signal: resizeController.signal,
+    });
+    root.cleanup = () => resizeController.abort();
+
     const selBtn = root.querySelector("#gptSelBtn");
     const expBtn = root.querySelector("#gptExpBtn");
     const expContainer = root.querySelector("#gptExpContainer");
@@ -214,6 +405,7 @@
       selBtn.textContent = selecting ? "Cancel" : "Select";
       if (selecting) {
         addCheckboxes();
+        updateToolbarPosition();
         expBtn.style.display = "inline-block";
         expContainer.style.display = "block";
         updateRoleControls();
@@ -240,7 +432,7 @@
     turns.forEach((node, index) => {
       if (node.querySelector(".gpt-turn-wrapper")) return;
 
-      const role = SEL.role(node);
+      const role = SEL.getRole(node);
       const roleIcon = role === "user" ? "👤" : role === "assistant" ? "🤖" : "?";
       const displayRole = role === "assistant" ? SEL.assistantName : role.toUpperCase();
 
@@ -305,11 +497,10 @@
   }
 
   function scrollToCheckbox(index) {
-    const cbx = document.querySelector(`#gpt-cbx-${index}`);
-    if (cbx) {
-      const turns = getMessageTurns();
-      const el = turns[index];
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+    const turns = getMessageTurns();
+    const el = turns[index];
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
     }
   }
 
@@ -335,7 +526,7 @@
     let assistantSelected = 0;
 
     turns.forEach((node, index) => {
-      const role = SEL.role(node);
+      const role = SEL.getRole(node);
       const cbx = document.querySelector(`#gpt-cbx-${index}`);
       if (role === "user") {
         userCount++;
@@ -374,7 +565,7 @@
 
   function selectRole(role, checked) {
     getMessageTurns().forEach((node, index) => {
-      if (SEL.role(node) === role) {
+      if (SEL.getRole(node) === role) {
         const cbx = document.querySelector(`#gpt-cbx-${index}`);
         if (cbx) cbx.checked = checked;
       }
@@ -401,18 +592,10 @@
     let md = `# ${title}\n\n_Exported: ${ts}_\n\n`;
 
     selected.forEach((el) => {
-      const role = SEL.role(el);
+      const role = SEL.getRole(el);
       const roleLabel = role === "assistant" ? SEL.assistantName : role.toUpperCase();
-
-      let bodyHTML;
-      if (PLATFORM === "claude") {
-        bodyHTML = extractClaudeText(el);
-      } else {
-        const textEl = SEL.textContainer(el);
-        bodyHTML = textEl ? textEl.innerHTML : "(no text)";
-      }
-
-      const body = htmlToMarkdown(bodyHTML);
+      const bodyHTML = SEL.extractHTML(el);
+      const body = htmlToMarkdown(bodyHTML || "(no text)");
       md += `## ${roleLabel}\n\n${body}\n\n`;
     });
 
@@ -437,7 +620,10 @@
     currentUrl = newUrl;
 
     const existing = document.getElementById(EXPORTER_ID);
-    if (existing) existing.remove();
+    if (existing) {
+      if (typeof existing.cleanup === "function") existing.cleanup();
+      existing.remove();
+    }
     if (contentCheckInterval) clearInterval(contentCheckInterval);
 
     setTimeout(tryInject, 300);
@@ -460,7 +646,7 @@
   }
 
   function tryInject() {
-    waitForEl("main, [data-testid='chat-input-grid-container'], form")
+    waitForEl(SEL.readySelector)
       .then(() => injectToolbar())
       .catch(() => setTimeout(injectToolbar, 2000));
   }

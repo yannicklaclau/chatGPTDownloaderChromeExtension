@@ -1,8 +1,8 @@
 {
   "name": "chat-local-exporter",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
-  "description": "Chrome extension to export ChatGPT and Claude conversations to markdown.",
+  "description": "Chrome extension to export ChatGPT, Claude, Grok, and Gemini conversations to markdown.",
   "scripts": {
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",

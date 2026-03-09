@@ -1,4 +1,4 @@
-/* File: style.css (v0.2 - ChatGPT + Claude) */
+/* File: style.css (v0.3 - ChatGPT + Claude + Grok + Gemini) */
 
 /* Toolbar container */
 #__gpt_local_exporter {
@@ -17,6 +17,11 @@
   left: 320px;
 }
 
+#__gpt_local_exporter[data-platform="grok"],
+#__gpt_local_exporter[data-platform="gemini"] {
+  left: 320px;
+}
+
 /* Brand tokens */
 #__gpt_local_exporter {
   --brand: #10a37f;
@@ -28,6 +33,18 @@
   --brand: #d97706;
   --brand-hover: #b45309;
   --brand-active: #92400e;
+}
+
+#__gpt_local_exporter[data-platform="grok"] {
+  --brand: #111827;
+  --brand-hover: #1f2937;
+  --brand-active: #030712;
+}
+
+#__gpt_local_exporter[data-platform="gemini"] {
+  --brand: #1a73e8;
+  --brand-hover: #1557b0;
+  --brand-active: #12449a;
 }
 
 /* Main controls */
@@ -75,6 +92,16 @@
 #__gpt_local_exporter[data-platform="claude"] #gptExpContainer {
   background: rgba(217, 119, 6, 0.05);
   border-color: rgba(217, 119, 6, 0.2);
+}
+
+#__gpt_local_exporter[data-platform="grok"] #gptExpContainer {
+  background: rgba(17, 24, 39, 0.05);
+  border-color: rgba(17, 24, 39, 0.18);
+}
+
+#__gpt_local_exporter[data-platform="gemini"] #gptExpContainer {
+  background: rgba(26, 115, 232, 0.05);
+  border-color: rgba(26, 115, 232, 0.2);
 }
 
 /* Role controls */
